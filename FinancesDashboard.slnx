@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="src/FinancesDashboard.ApiService/FinancesDashboard.ApiService.csproj" />
+  <Project Path="src/FinancesDashboard.AppHost/FinancesDashboard.AppHost.csproj" />
+  <Project Path="src/FinancesDashboard.ServiceDefaults/FinancesDashboard.ServiceDefaults.csproj" />
+  <Project Path="src/FinancesDashboard.Tests/FinancesDashboard.Tests.csproj" />
+  <Project Path="src/FinancesDashboard.Web/FinancesDashboard.Web.csproj" />
+</Solution>
