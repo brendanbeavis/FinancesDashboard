@@ -1,7 +1,162 @@
 ﻿@page "/"
 
-<PageTitle>Home</PageTitle>
+@inject FinancesApiClient ApiClient
 
-<h1>Hello, world!</h1>
+<PageTitle>Dashboard</PageTitle>
 
-Welcome to your new app.
+<h1>Dashboard</h1>
+
+@if (isLoading)
+{
+    <p><em>Loading dashboard...</em></p>
+}
+else if (!string.IsNullOrWhiteSpace(loadError))
+{
+    <div class="alert alert-danger">@loadError</div>
+}
+else
+{
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card"><div class="card-body"><div class="text-muted">Net Position</div><div class="h4">@FormatCurrency(summary.CurrentNetPosition)</div></div></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card"><div class="card-body"><div class="text-muted">Cash</div><div class="h4">@FormatCurrency(summary.CurrentCashPosition)</div></div></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card"><div class="card-body"><div class="text-muted">Credit Card</div><div class="h4">@FormatCurrency(summary.CurrentCreditCardPosition)</div></div></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card"><div class="card-body"><div class="text-muted">Mortgage</div><div class="h4">@FormatCurrency(summary.CurrentMortgagePosition)</div></div></div>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <label class="form-label" for="account-selector">Account balance history</label>
+            <select id="account-selector" class="form-select" @bind="selectedAccountId" @bind:after="OnSelectedAccountChangedAsync">
+                <option value="">Select an account</option>
+                @foreach (var account in accounts)
+                {
+                    <option value="@account.Id">@account.Name (@account.Type)</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(balanceError))
+    {
+        <div class="alert alert-danger">@balanceError</div>
+    }
+    else if (isBalanceLoading)
+    {
+        <p><em>Loading balance history...</em></p>
+    }
+    else if (balanceHistory.Count == 0)
+    {
+        <div class="alert alert-secondary">No balance history for this account yet.</div>
+    }
+    else
+    {
+        <div class="mb-2"><strong>Current observed balance:</strong> @FormatCurrency(balanceHistory[^1].Balance)</div>
+
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Observed Bank Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var point in balanceHistory)
+                {
+                    <tr>
+                        <td>@point.Date.ToString("dd/MM/yyyy")</td>
+                        <td>@FormatCurrency(point.Balance)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private DashboardSummaryModel summary = new(0m, 0m, 0m, 0m);
+    private List<AccountModel> accounts = [];
+    private List<BalancePointModel> balanceHistory = [];
+    private bool isLoading = true;
+    private bool isBalanceLoading;
+    private string? loadError;
+    private string? balanceError;
+    private string? selectedAccountId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardAsync();
+    }
+
+    private async Task LoadDashboardAsync()
+    {
+        isLoading = true;
+        loadError = null;
+
+        try
+        {
+            summary = await ApiClient.GetDashboardSummaryAsync();
+            accounts = (await ApiClient.GetAccountsAsync()).OrderBy(account => account.Name).ToList();
+
+            var first = accounts.FirstOrDefault();
+            if (first is not null)
+            {
+                selectedAccountId = first.Id.ToString();
+                await LoadBalanceHistoryAsync(first.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            loadError = $"Unable to load dashboard: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task OnSelectedAccountChangedAsync()
+    {
+        if (!Guid.TryParse(selectedAccountId, out var accountId))
+        {
+            balanceHistory = [];
+            return;
+        }
+
+        await LoadBalanceHistoryAsync(accountId);
+    }
+
+    private async Task LoadBalanceHistoryAsync(Guid accountId)
+    {
+        isBalanceLoading = true;
+        balanceError = null;
+
+        try
+        {
+            balanceHistory = (await ApiClient.GetBalanceHistoryAsync(accountId))
+                .OrderBy(point => point.Date)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            balanceError = $"Unable to load balance history: {ex.Message}";
+            balanceHistory = [];
+        }
+        finally
+        {
+            isBalanceLoading = false;
+        }
+    }
+
+    private static string FormatCurrency(decimal amount)
+    {
+        return amount.ToString("C");
+    }
+}

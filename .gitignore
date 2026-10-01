@@ -18,6 +18,7 @@
 mono_crash.*
 
 data/
+prompts/
 
 # Build results
 [Dd]ebug/

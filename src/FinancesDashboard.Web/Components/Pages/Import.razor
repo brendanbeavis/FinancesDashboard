@@ -1,0 +1,153 @@
+@page "/import"
+
+@inject FinancesApiClient ApiClient
+
+<PageTitle>Import</PageTitle>
+
+<h1>Import CBA CSV</h1>
+
+@if (isLoading)
+{
+    <p><em>Loading accounts...</em></p>
+}
+else if (!string.IsNullOrWhiteSpace(loadError))
+{
+    <div class="alert alert-danger">@loadError</div>
+}
+else if (accounts.Count == 0)
+{
+    <div class="alert alert-secondary">
+        No accounts available. Create an account first in the Accounts page.
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label" for="import-account">Account</label>
+                <select id="import-account" class="form-select" @bind="selectedAccountId">
+                    <option value="">Select an account</option>
+                    @foreach (var account in accounts)
+                    {
+                        <option value="@account.Id">@account.Name (@account.Type)</option>
+                    }
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">CSV file</label>
+                <InputFile OnChange="OnFileSelected" accept=".csv,text/csv" class="form-control" />
+                @if (!string.IsNullOrWhiteSpace(selectedFileName))
+                {
+                    <div class="form-text">Selected: @selectedFileName</div>
+                }
+            </div>
+
+            <button class="btn btn-primary" @onclick="ImportAsync" disabled="@isImporting">@(isImporting ? "Importing..." : "Import")</button>
+
+            @if (!string.IsNullOrWhiteSpace(importError))
+            {
+                <div class="alert alert-danger mt-3">@importError</div>
+            }
+
+            @if (importResult is not null)
+            {
+                <div class="alert alert-info mt-3">
+                    <div><strong>Imported:</strong> @importResult.Imported</div>
+                    <div><strong>Skipped:</strong> @importResult.Skipped</div>
+                    <div><strong>Errors:</strong> @importResult.Errors.Count</div>
+                </div>
+
+                @if (importResult.Errors.Count > 0)
+                {
+                    <ul class="list-group mt-2">
+                        @foreach (var error in importResult.Errors)
+                        {
+                            <li class="list-group-item list-group-item-warning">@error</li>
+                        }
+                    </ul>
+                }
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private List<AccountModel> accounts = [];
+    private bool isLoading = true;
+    private bool isImporting;
+    private string? loadError;
+    private string? importError;
+    private string? selectedAccountId;
+    private IBrowserFile? selectedFile;
+    private string? selectedFileName;
+    private ImportResultModel? importResult;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAccountsAsync();
+    }
+
+    private async Task LoadAccountsAsync()
+    {
+        isLoading = true;
+        loadError = null;
+
+        try
+        {
+            var result = await ApiClient.GetAccountsAsync();
+            accounts = result.OrderBy(account => account.Name).ToList();
+        }
+        catch (Exception ex)
+        {
+            loadError = $"Unable to load accounts: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OnFileSelected(InputFileChangeEventArgs args)
+    {
+        selectedFile = args.File;
+        selectedFileName = args.File.Name;
+        importResult = null;
+        importError = null;
+    }
+
+    private async Task ImportAsync()
+    {
+        importError = null;
+        importResult = null;
+
+        if (!Guid.TryParse(selectedAccountId, out var accountId))
+        {
+            importError = "Select an account before importing.";
+            return;
+        }
+
+        if (selectedFile is null)
+        {
+            importError = "Select a CSV file before importing.";
+            return;
+        }
+
+        isImporting = true;
+
+        try
+        {
+            await using var stream = selectedFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            importResult = await ApiClient.ImportCbaAsync(accountId, stream, selectedFile.Name);
+        }
+        catch (Exception ex)
+        {
+            importError = $"Import failed: {ex.Message}";
+        }
+        finally
+        {
+            isImporting = false;
+        }
+    }
+}

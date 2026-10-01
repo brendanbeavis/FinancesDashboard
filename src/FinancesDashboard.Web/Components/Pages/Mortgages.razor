@@ -1,0 +1,185 @@
+@page "/mortgages"
+
+@inject FinancesApiClient ApiClient
+
+<PageTitle>Mortgages</PageTitle>
+
+<h1>Mortgages</h1>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h2 class="h5">Create mortgage</h2>
+
+        @if (!string.IsNullOrWhiteSpace(createError))
+        {
+            <div class="alert alert-danger">@createError</div>
+        }
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">Name</label>
+                <input class="form-control" @bind="name" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Original Principal</label>
+                <input class="form-control" type="number" step="0.01" @bind="originalPrincipal" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Current Principal</label>
+                <input class="form-control" type="number" step="0.01" @bind="currentPrincipal" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Annual Rate</label>
+                <input class="form-control" type="number" step="0.0001" @bind="annualInterestRate" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Repayment</label>
+                <input class="form-control" type="number" step="0.01" @bind="scheduledRepayment" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Repayments/Year</label>
+                <input class="form-control" type="number" @bind="repaymentsPerYear" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Start Date</label>
+                <input class="form-control" type="date" @bind="startDate" />
+            </div>
+        </div>
+
+        <button class="btn btn-primary mt-3" @onclick="CreateMortgageAsync" disabled="@isCreating">@(isCreating ? "Creating..." : "Create mortgage")</button>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <p><em>Loading mortgages...</em></p>
+}
+else if (!string.IsNullOrWhiteSpace(loadError))
+{
+    <div class="alert alert-danger">@loadError</div>
+}
+else if (mortgages.Count == 0)
+{
+    <div class="alert alert-secondary">No mortgages yet.</div>
+}
+else
+{
+    @foreach (var mortgage in mortgages)
+    {
+        <div class="card mb-3">
+            <div class="card-body">
+                <h3 class="h5">@mortgage.Name</h3>
+                <div><strong>Current Principal:</strong> @FormatCurrency(mortgage.CurrentPrincipal)</div>
+                <div><strong>Projected Balance:</strong> @FormatCurrency(mortgage.Projection.ProjectedBalance)</div>
+                <div><strong>Remaining Projected Interest:</strong> @FormatCurrency(mortgage.Projection.TotalRemainingInterest)</div>
+                <div><strong>Estimated Payoff Date:</strong> @(mortgage.Projection.EstimatedPayoffDate?.ToString("dd/MM/yyyy") ?? "Not reached in horizon")</div>
+                <div class="mt-2"><small class="text-muted">@mortgage.Projection.Assumption</small></div>
+
+                @if (mortgage.InterestRateHistory.Count > 0)
+                {
+                    <details class="mt-3">
+                        <summary>Rate history</summary>
+                        <ul class="mt-2">
+                            @foreach (var period in mortgage.InterestRateHistory.OrderBy(period => period.StartDate))
+                            {
+                                <li>@period.StartDate.ToString("dd/MM/yyyy") - @(period.EndDate?.ToString("dd/MM/yyyy") ?? "Current"): @period.AnnualInterestRate:P2</li>
+                            }
+                        </ul>
+                    </details>
+                }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private List<MortgageModel> mortgages = [];
+    private bool isLoading = true;
+    private bool isCreating;
+    private string? loadError;
+    private string? createError;
+
+    private string name = string.Empty;
+    private decimal originalPrincipal;
+    private decimal currentPrincipal;
+    private decimal annualInterestRate;
+    private decimal scheduledRepayment;
+    private int repaymentsPerYear = 12;
+    private DateOnly startDate = DateOnly.FromDateTime(DateTime.Today);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMortgagesAsync();
+    }
+
+    private async Task LoadMortgagesAsync()
+    {
+        isLoading = true;
+        loadError = null;
+
+        try
+        {
+            mortgages = (await ApiClient.GetMortgagesAsync()).OrderBy(mortgage => mortgage.Name).ToList();
+        }
+        catch (Exception ex)
+        {
+            loadError = $"Unable to load mortgages: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task CreateMortgageAsync()
+    {
+        createError = null;
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            createError = "Mortgage name is required.";
+            return;
+        }
+
+        isCreating = true;
+
+        try
+        {
+            var request = new CreateMortgageRequestModel(
+                name.Trim(),
+                originalPrincipal,
+                currentPrincipal,
+                annualInterestRate,
+                scheduledRepayment,
+                repaymentsPerYear,
+                startDate,
+                null,
+                [new InterestRatePeriodModel(startDate, null, annualInterestRate)]);
+
+            var created = await ApiClient.CreateMortgageAsync(request);
+            mortgages.Add(created);
+            mortgages = mortgages.OrderBy(mortgage => mortgage.Name).ToList();
+
+            name = string.Empty;
+            originalPrincipal = 0m;
+            currentPrincipal = 0m;
+            annualInterestRate = 0m;
+            scheduledRepayment = 0m;
+            repaymentsPerYear = 12;
+            startDate = DateOnly.FromDateTime(DateTime.Today);
+        }
+        catch (Exception ex)
+        {
+            createError = $"Unable to create mortgage: {ex.Message}";
+        }
+        finally
+        {
+            isCreating = false;
+        }
+    }
+
+    private static string FormatCurrency(decimal amount)
+    {
+        return amount.ToString("C");
+    }
+}

@@ -1,0 +1,139 @@
+@page "/accounts"
+
+@inject FinancesApiClient ApiClient
+
+<PageTitle>Accounts</PageTitle>
+
+<h1>Accounts</h1>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h2 class="h5">Create account</h2>
+
+        @if (!string.IsNullOrWhiteSpace(createError))
+        {
+            <div class="alert alert-danger">@createError</div>
+        }
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label" for="account-name">Name</label>
+                <input id="account-name" class="form-control" @bind="newAccountName" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="account-type">Type</label>
+                <select id="account-type" class="form-select" @bind="newAccountType">
+                    @foreach (var type in accountTypes)
+                    {
+                        <option value="@type">@type</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <button class="btn btn-primary mt-3" @onclick="CreateAccountAsync" disabled="@isCreating">@(isCreating ? "Creating..." : "Create account")</button>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <p><em>Loading accounts...</em></p>
+}
+else if (!string.IsNullOrWhiteSpace(loadError))
+{
+    <div class="alert alert-danger">@loadError</div>
+}
+else if (accounts.Count == 0)
+{
+    <div class="alert alert-secondary">No accounts yet. Create your first account above.</div>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Active</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var account in accounts)
+            {
+                <tr>
+                    <td>@account.Name</td>
+                    <td>@account.Type</td>
+                    <td>@(account.IsActive ? "Yes" : "No")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private readonly string[] accountTypes = ["Transaction", "Savings", "CreditCard", "Mortgage", "Investment", "Other"];
+
+    private List<AccountModel> accounts = [];
+    private bool isLoading = true;
+    private bool isCreating;
+    private string? loadError;
+    private string? createError;
+    private string newAccountName = string.Empty;
+    private string newAccountType = "Transaction";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAccountsAsync();
+    }
+
+    private async Task LoadAccountsAsync()
+    {
+        isLoading = true;
+        loadError = null;
+
+        try
+        {
+            var result = await ApiClient.GetAccountsAsync();
+            accounts = result.OrderBy(account => account.Name).ToList();
+        }
+        catch (Exception ex)
+        {
+            loadError = $"Unable to load accounts: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task CreateAccountAsync()
+    {
+        createError = null;
+
+        if (string.IsNullOrWhiteSpace(newAccountName))
+        {
+            createError = "Account name is required.";
+            return;
+        }
+
+        isCreating = true;
+
+        try
+        {
+            var request = new CreateAccountRequestModel(newAccountName.Trim(), newAccountType);
+            var created = await ApiClient.CreateAccountAsync(request);
+            accounts.Add(created);
+            accounts = accounts.OrderBy(account => account.Name).ToList();
+            newAccountName = string.Empty;
+            newAccountType = "Transaction";
+        }
+        catch (Exception ex)
+        {
+            createError = $"Unable to create account: {ex.Message}";
+        }
+        finally
+        {
+            isCreating = false;
+        }
+    }
+}

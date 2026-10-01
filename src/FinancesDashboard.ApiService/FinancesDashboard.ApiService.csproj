@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\FinancesDashboard.Application\FinancesDashboard.Application.csproj" />
     <ProjectReference Include="..\FinancesDashboard.ServiceDefaults\FinancesDashboard.ServiceDefaults.csproj" />
   </ItemGroup>
 

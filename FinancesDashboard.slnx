@@ -1,4 +1,9 @@
 <Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FinancesDashboard.Application/FinancesDashboard.Application.csproj" />
+    <Project Path="src/FinancesDashboard.Domain/FinancesDashboard.Domain.csproj" />
+    <Project Path="src/FinancesDashboard.Infrastructure/FinancesDashboard.Infrastructure.csproj" />
+  </Folder>
   <Project Path="src/FinancesDashboard.ApiService/FinancesDashboard.ApiService.csproj" />
   <Project Path="src/FinancesDashboard.AppHost/FinancesDashboard.AppHost.csproj" />
   <Project Path="src/FinancesDashboard.ServiceDefaults/FinancesDashboard.ServiceDefaults.csproj" />
