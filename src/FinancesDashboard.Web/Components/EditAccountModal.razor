@@ -1,0 +1,132 @@
+@if (IsVisible)
+{
+    <div class="modal d-block" style="background-color: rgba(0,0,0,0.5);" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Account</h5>
+                    <button type="button" class="btn-close" @onclick="OnCancel"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+                    {
+                        <div class="alert alert-danger">@ErrorMessage</div>
+                    }
+
+                    <form>
+                        <div class="mb-3">
+                            <label class="form-label" for="edit-name">Name</label>
+                            <input id="edit-name" class="form-control" @bind="EditName" />
+                        </div>
+
+                        <div class="mb-3 form-check">
+                            <input id="edit-active" type="checkbox" class="form-check-input" @bind="EditIsActive" />
+                            <label class="form-check-label" for="edit-active">Active</label>
+                        </div>
+                    </form>
+
+                    <div class="alert alert-warning">
+                        <strong>Danger Zone:</strong> Delete this account permanently.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger me-auto" @onclick="OnDelete" disabled="@IsDeleting">
+                        @(IsDeleting ? "Deleting..." : "Delete Account")
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="OnCancel">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="OnSave" disabled="@IsLoading">
+                        @(IsLoading ? "Saving..." : "Save Changes")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool IsLoading;
+    private bool IsDeleting;
+    private string? ErrorMessage;
+
+    [Parameter]
+    public AccountModel? Account { get; set; }
+
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public EventCallback<AccountModel?> OnClose { get; set; }
+
+    private string EditName = string.Empty;
+    private bool EditIsActive = true;
+
+    protected override void OnParametersSet()
+    {
+        if (Account is not null)
+        {
+            EditName = Account.Name;
+            EditIsActive = Account.IsActive;
+            ErrorMessage = null;
+        }
+    }
+
+    private async Task OnSave()
+    {
+        ErrorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(EditName))
+        {
+            ErrorMessage = "Account name is required.";
+            return;
+        }
+
+        IsLoading = true;
+
+        try
+        {
+            await OnSaveAsync.InvokeAsync((EditName, EditIsActive));
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task OnDelete()
+    {
+        if (!await ConfirmDeleteAsync())
+        {
+            return;
+        }
+
+        IsDeleting = true;
+
+        try
+        {
+            await OnDeleteAsync.InvokeAsync();
+        }
+        finally
+        {
+            IsDeleting = false;
+        }
+    }
+
+    private Task OnCancel()
+    {
+        return OnClose.InvokeAsync(null);
+    }
+
+    [Parameter]
+    public EventCallback<(string Name, bool IsActive)> OnSaveAsync { get; set; }
+
+    [Parameter]
+    public EventCallback OnDeleteAsync { get; set; }
+
+    private async Task<bool> ConfirmDeleteAsync()
+    {
+        return await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete the account '{Account?.Name}'? This action cannot be undone.");
+    }
+
+    [Inject]
+    private IJSRuntime? JS { get; set; }
+}

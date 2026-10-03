@@ -1,0 +1,102 @@
+@if (IsVisible)
+{
+    <div class="modal d-block" style="background-color: rgba(0,0,0,0.5);" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create Account</h5>
+                    <button type="button" class="btn-close" @onclick="OnCancel"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+                    {
+                        <div class="alert alert-danger">@ErrorMessage</div>
+                    }
+
+                    <form>
+                        <div class="mb-3">
+                            <label class="form-label" for="create-name">Name</label>
+                            <input id="create-name" class="form-control" @bind="AccountName" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label" for="create-type">Type</label>
+                            <select id="create-type" class="form-select" @bind="AccountType">
+                                @foreach (var type in AccountTypes)
+                                {
+                                    <option value="@type">@type</option>
+                                }
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="OnCancel">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="OnCreate" disabled="@IsLoading">
+                        @(IsLoading ? "Creating..." : "Create Account")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool IsLoading;
+    private string? ErrorMessage;
+
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public string[] AccountTypes { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<(string Name, string Type)> OnCreateAsync { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private string AccountName = string.Empty;
+    private string AccountType = "Transaction";
+
+    protected override void OnParametersSet()
+    {
+        if (IsVisible)
+        {
+            // Reset form when modal opens
+            AccountName = string.Empty;
+            AccountType = AccountTypes.FirstOrDefault() ?? "Transaction";
+            ErrorMessage = null;
+        }
+    }
+
+    private async Task OnCreate()
+    {
+        ErrorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(AccountName))
+        {
+            ErrorMessage = "Account name is required.";
+            return;
+        }
+
+        IsLoading = true;
+
+        try
+        {
+            await OnCreateAsync.InvokeAsync((AccountName.Trim(), AccountType));
+            AccountName = string.Empty;
+            AccountType = AccountTypes.FirstOrDefault() ?? "Transaction";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private Task OnCancel()
+    {
+        return OnClose.InvokeAsync();
+    }
+}

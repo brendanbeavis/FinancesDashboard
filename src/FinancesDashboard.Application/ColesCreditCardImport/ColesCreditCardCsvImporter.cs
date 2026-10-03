@@ -3,15 +3,18 @@ using System.Security.Cryptography;
 using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
+using FinancesDashboard.Application.CbaImport;
 using FinancesDashboard.Domain.Models;
 using FinancesDashboard.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
-namespace FinancesDashboard.Application.CbaImport;
+namespace FinancesDashboard.Application.ColesCreditCardImport;
 
-public sealed class CbaCsvImporter(FinancesDashboardDbContext dbContext)
+public sealed class ColesCreditCardCsvImporter(FinancesDashboardDbContext dbContext)
 {
-    private const string DateFormat = "dd/MM/yyyy";
+    // Coles date format uses "Sept" (4 chars) instead of "Sep" (3 chars)
+    private static readonly string[] DateFormats = ["dd MMM yy", "dd MMMM yy"];
+    private static readonly CultureInfo AuCulture = new CultureInfo("en-AU");
 
     public async Task<ImportResult> ImportAsync(Guid accountId, Stream csvStream, CancellationToken cancellationToken = default)
     {
@@ -29,9 +32,9 @@ public sealed class CbaCsvImporter(FinancesDashboardDbContext dbContext)
         var seenHashes = new HashSet<string>(StringComparer.Ordinal);
 
         using var reader = new StreamReader(csvStream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
-        var csvConfiguration = new CsvConfiguration(CultureInfo.InvariantCulture)
+        var csvConfiguration = new CsvConfiguration(AuCulture)
         {
-            HasHeaderRecord = false,
+            HasHeaderRecord = true,
             TrimOptions = TrimOptions.Trim
         };
 
@@ -87,29 +90,34 @@ public sealed class CbaCsvImporter(FinancesDashboardDbContext dbContext)
         string dateText;
         string amountText;
         string description;
-        string bankBalanceText;
 
         try
         {
+            // CSV columns: Date,Amount,Account Number,,Transaction Type,Transaction Details,Category,Merchant Name,Processed On
             dateText = csv.GetField(0) ?? string.Empty;
             amountText = csv.GetField(1) ?? string.Empty;
-            description = csv.GetField(2) ?? string.Empty;
-            bankBalanceText = csv.GetField(3) ?? string.Empty;
-            if (string.IsNullOrEmpty(bankBalanceText)) bankBalanceText = "0";
+            var transactionDetails = csv.GetField(5) ?? string.Empty;
+            var merchantName = csv.GetField(7) ?? string.Empty;
+
+            // Use merchant name if available, otherwise use transaction details
+            description = !string.IsNullOrWhiteSpace(merchantName) 
+                ? merchantName 
+                : transactionDetails;
         }
         catch (Exception)
         {
-            error = $"Row {row}: Expected 4 columns (TIMESTAMP, AMOUNT, DESCRIPTION, NET_ACCOUNT_TOTAL).";
+            error = $"Row {row}: Error reading CSV fields.";
             return false;
         }
 
-        if (!DateOnly.TryParseExact(dateText, DateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        // Try multiple date formats to handle "Sept" (4 chars) and "Sep" (3 chars)
+        if (!DateOnly.TryParseExact(dateText, DateFormats, AuCulture, DateTimeStyles.None, out var date))
         {
-            error = $"Row {row}: Invalid date '{dateText}'. Expected format dd/MM/yyyy.";
+            error = $"Row {row}: Invalid date '{dateText}'. Expected format dd MMM yy (e.g., '30 Sept 26').";
             return false;
         }
 
-        if (!decimal.TryParse(amountText, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount))
+        if (!decimal.TryParse(amountText, NumberStyles.Number, AuCulture, out var amount))
         {
             error = $"Row {row}: Invalid amount '{amountText}'.";
             return false;
@@ -121,11 +129,8 @@ public sealed class CbaCsvImporter(FinancesDashboardDbContext dbContext)
             return false;
         }
 
-        if (!decimal.TryParse(bankBalanceText, NumberStyles.Number, CultureInfo.InvariantCulture, out var bankBalance))
-        {
-            error = $"Row {row}: Invalid NET_ACCOUNT_TOTAL '{bankBalanceText}'.";
-            return false;
-        }
+        // For credit card imports, bank balance is 0 as it's not provided in the CSV
+        var bankBalance = 0m;
 
         transaction = new Transaction
         {

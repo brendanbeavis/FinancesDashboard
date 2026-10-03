@@ -1,38 +1,13 @@
 @page "/accounts"
 
 @inject FinancesApiClient ApiClient
+@inject NavigationManager NavigationManager
 
 <PageTitle>Accounts</PageTitle>
 
-<h1>Accounts</h1>
-
-<div class="card mb-4">
-    <div class="card-body">
-        <h2 class="h5">Create account</h2>
-
-        @if (!string.IsNullOrWhiteSpace(createError))
-        {
-            <div class="alert alert-danger">@createError</div>
-        }
-
-        <div class="row g-3">
-            <div class="col-md-6">
-                <label class="form-label" for="account-name">Name</label>
-                <input id="account-name" class="form-control" @bind="newAccountName" />
-            </div>
-            <div class="col-md-6">
-                <label class="form-label" for="account-type">Type</label>
-                <select id="account-type" class="form-select" @bind="newAccountType">
-                    @foreach (var type in accountTypes)
-                    {
-                        <option value="@type">@type</option>
-                    }
-                </select>
-            </div>
-        </div>
-
-        <button class="btn btn-primary mt-3" @onclick="CreateAccountAsync" disabled="@isCreating">@(isCreating ? "Creating..." : "Create account")</button>
-    </div>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Accounts</h1>
+    <button class="btn btn-success" @onclick="OnAddAccountClick">+ Add Account</button>
 </div>
 
 @if (isLoading)
@@ -45,7 +20,7 @@ else if (!string.IsNullOrWhiteSpace(loadError))
 }
 else if (accounts.Count == 0)
 {
-    <div class="alert alert-secondary">No accounts yet. Create your first account above.</div>
+    <div class="alert alert-secondary">No accounts yet. Click "Add Account" to create one.</div>
 }
 else
 {
@@ -55,6 +30,7 @@ else
                 <th>Name</th>
                 <th>Type</th>
                 <th>Active</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -64,22 +40,40 @@ else
                     <td>@account.Name</td>
                     <td>@account.Type</td>
                     <td>@(account.IsActive ? "Yes" : "No")</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" @onclick="() => OnEditClick(account)">Edit</button>
+                        <button class="btn btn-sm btn-secondary ms-2" @onclick="() => OnViewClick(account)">View</button>
+                        <button class="btn btn-sm btn-warning ms-2" @onclick="() => OnImportClick(account)">Import Data</button>
+                    </td>
                 </tr>
             }
         </tbody>
     </table>
 }
 
+<CreateAccountModal 
+    IsVisible="showCreateModal"
+    AccountTypes="accountTypes"
+    OnCreateAsync="OnCreateAccount"
+    OnClose="OnCreateClose" />
+
+<EditAccountModal 
+    Account="selectedAccount" 
+    IsVisible="showEditModal"
+    OnClose="OnEditClose"
+    OnSaveAsync="OnEditSave"
+    OnDeleteAsync="OnEditDelete" />
+
 @code {
     private readonly string[] accountTypes = ["Transaction", "Savings", "CreditCard", "Mortgage", "Investment", "Other"];
 
     private List<AccountModel> accounts = [];
     private bool isLoading = true;
-    private bool isCreating;
     private string? loadError;
-    private string? createError;
-    private string newAccountName = string.Empty;
-    private string newAccountType = "Transaction";
+
+    private AccountModel? selectedAccount;
+    private bool showEditModal;
+    private bool showCreateModal;
 
     protected override async Task OnInitializedAsync()
     {
@@ -106,34 +100,96 @@ else
         }
     }
 
-    private async Task CreateAccountAsync()
+    private void OnAddAccountClick()
     {
-        createError = null;
+        showCreateModal = true;
+    }
 
-        if (string.IsNullOrWhiteSpace(newAccountName))
-        {
-            createError = "Account name is required.";
-            return;
-        }
-
-        isCreating = true;
-
+    private async Task OnCreateAccount((string Name, string Type) values)
+    {
         try
         {
-            var request = new CreateAccountRequestModel(newAccountName.Trim(), newAccountType);
+            var request = new CreateAccountRequestModel(values.Name, values.Type);
             var created = await ApiClient.CreateAccountAsync(request);
             accounts.Add(created);
             accounts = accounts.OrderBy(account => account.Name).ToList();
-            newAccountName = string.Empty;
-            newAccountType = "Transaction";
+            showCreateModal = false;
         }
         catch (Exception ex)
         {
-            createError = $"Unable to create account: {ex.Message}";
+            loadError = $"Unable to create account: {ex.Message}";
         }
-        finally
+    }
+
+    private Task OnCreateClose()
+    {
+        showCreateModal = false;
+        return Task.CompletedTask;
+    }
+
+    private void OnEditClick(AccountModel account)
+    {
+        selectedAccount = account;
+        showEditModal = true;
+    }
+
+    private async Task OnEditSave((string Name, bool IsActive) values)
+    {
+        if (selectedAccount is null)
+            return;
+
+        try
         {
-            isCreating = false;
+            var request = new UpdateAccountRequestModel(values.Name, values.IsActive);
+            var updated = await ApiClient.UpdateAccountAsync(selectedAccount.Id, request);
+
+            var index = accounts.FindIndex(a => a.Id == selectedAccount.Id);
+            if (index >= 0)
+            {
+                accounts[index] = updated;
+            }
+
+            showEditModal = false;
+            selectedAccount = null;
         }
+        catch (Exception ex)
+        {
+            loadError = $"Unable to update account: {ex.Message}";
+        }
+    }
+
+    private async Task OnEditDelete()
+    {
+        if (selectedAccount is null)
+            return;
+
+        try
+        {
+            await ApiClient.DeleteAccountAsync(selectedAccount.Id);
+            accounts.RemoveAll(a => a.Id == selectedAccount.Id);
+            showEditModal = false;
+            selectedAccount = null;
+        }
+        catch (Exception ex)
+        {
+            loadError = $"Unable to delete account: {ex.Message}";
+        }
+    }
+
+    private Task OnEditClose(AccountModel? _)
+    {
+        showEditModal = false;
+        selectedAccount = null;
+        return Task.CompletedTask;
+    }
+
+    private void OnImportClick(AccountModel account)
+    {
+        NavigationManager.NavigateTo($"/import?accountId={account.Id}");
+    }
+
+    private void OnViewClick(AccountModel account)
+    {
+        NavigationManager.NavigateTo($"/accounts/{account.Id}/transactions");
     }
 }

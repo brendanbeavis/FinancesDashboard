@@ -30,6 +30,18 @@ public sealed class FinancesApiClient(HttpClient httpClient)
         return result ?? throw new InvalidOperationException("Import response payload was empty.");
     }
 
+    public async Task<ImportResultModel> ImportColesAsync(Guid accountId, Stream fileStream, string fileName, CancellationToken cancellationToken = default)
+    {
+        using var content = new MultipartFormDataContent();
+        content.Add(new StreamContent(fileStream), "file", fileName);
+
+        var response = await httpClient.PostAsync($"/api/import/coles/{accountId}", content, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadFromJsonAsync<ImportResultModel>(cancellationToken);
+        return result ?? throw new InvalidOperationException("Import response payload was empty.");
+    }
+
     public async Task<DashboardSummaryModel> GetDashboardSummaryAsync(CancellationToken cancellationToken = default)
     {
         var summary = await httpClient.GetFromJsonAsync<DashboardSummaryModel>("/api/dashboard/summary", cancellationToken);
@@ -53,5 +65,25 @@ public sealed class FinancesApiClient(HttpClient httpClient)
 
         var mortgage = await response.Content.ReadFromJsonAsync<MortgageModel>(cancellationToken);
         return mortgage ?? throw new InvalidOperationException("Mortgage response payload was empty.");
+    }
+
+    public async Task<AccountModel> UpdateAccountAsync(Guid id, UpdateAccountRequestModel request, CancellationToken cancellationToken = default)
+    {
+        var response = await httpClient.PutAsJsonAsync($"/api/accounts/{id}", request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var account = await response.Content.ReadFromJsonAsync<AccountModel>(cancellationToken);
+        return account ?? throw new InvalidOperationException("Account response payload was empty.");
+    }
+
+    public async Task DeleteAccountAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var response = await httpClient.DeleteAsync($"/api/accounts/{id}", cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<IReadOnlyList<TransactionModel>> GetAccountTransactionsAsync(Guid accountId, CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<List<TransactionModel>>($"/api/accounts/{accountId}/transactions", cancellationToken) ?? [];
     }
 }

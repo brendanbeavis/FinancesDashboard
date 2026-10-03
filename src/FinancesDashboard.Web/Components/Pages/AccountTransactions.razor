@@ -1,0 +1,101 @@
+@page "/accounts/{AccountId:guid}/transactions"
+
+@inject FinancesApiClient ApiClient
+@inject NavigationManager NavigationManager
+
+<PageTitle>Account Transactions</PageTitle>
+
+<div class="mb-3">
+    <a href="/accounts" class="btn btn-secondary">Back to Accounts</a>
+</div>
+
+<h1>@AccountName Transactions</h1>
+
+@if (IsLoading)
+{
+    <p><em>Loading transactions...</em></p>
+}
+else if (!string.IsNullOrWhiteSpace(LoadError))
+{
+    <div class="alert alert-danger">@LoadError</div>
+}
+else if (transactions.Count == 0)
+{
+    <div class="alert alert-secondary">No transactions found for this account.</div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                    <th>Bank Balance</th>
+                    <th>Imported</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var transaction in transactions)
+                {
+                    <tr>
+                        <td>@transaction.Date.ToLongDateString()</td>
+                        <td>@transaction.Description</td>
+                        <td class="text-end">
+                            <span class="@(transaction.Amount >= 0 ? "text-success" : "text-danger")">
+                                @transaction.Amount.ToString("C")
+                            </span>
+                        </td>
+                        <td class="text-end">@transaction.BankBalance.ToString("C")</td>
+                        <td>@transaction.ImportedUtc.ToString("g")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid AccountId { get; set; }
+
+    private List<TransactionModel> transactions = [];
+    private bool IsLoading = true;
+    private string? LoadError;
+    private string AccountName = "Unknown";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAccountsAsync();
+    }
+
+    private async Task LoadAccountsAsync()
+    {
+        IsLoading = true;
+        LoadError = null;
+
+        try
+        {
+            var accounts = await ApiClient.GetAccountsAsync();
+            var account = accounts.FirstOrDefault(a => a.Id == AccountId);
+
+            if (account is null)
+            {
+                LoadError = "Account not found.";
+                return;
+            }
+
+            AccountName = account.Name;
+            transactions = (await ApiClient.GetAccountTransactionsAsync(AccountId)).ToList();
+        }
+        catch (Exception ex)
+        {
+            LoadError = $"Unable to load transactions: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+}

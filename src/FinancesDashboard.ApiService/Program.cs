@@ -1,4 +1,5 @@
 using FinancesDashboard.Application.CbaImport;
+using FinancesDashboard.Application.ColesCreditCardImport;
 using FinancesDashboard.Application.Dto;
 using FinancesDashboard.Application.Forecasting;
 using FinancesDashboard.Application.Services;
@@ -33,6 +34,7 @@ builder.Services.AddScoped<IForecastStrategy, AverageMonthlyNetCashflowForecastS
 builder.Services.AddScoped<MortgageAmortizationService>();
 
 builder.Services.AddScoped<CbaCsvImporter>();
+builder.Services.AddScoped<ColesCreditCardCsvImporter>();
 builder.Services.AddScoped<AccountApplicationService>();
 builder.Services.AddScoped<DashboardApplicationService>();
 builder.Services.AddScoped<MortgageApplicationService>();
@@ -97,10 +99,92 @@ app.MapPost("/api/accounts", async (
     return Results.Created($"/api/accounts/{account.Id}", account);
 });
 
+app.MapPut("/api/accounts/{id:guid}", async (
+    Guid id,
+    [FromBody] UpdateAccountRequest? request,
+    AccountApplicationService service,
+    CancellationToken cancellationToken) =>
+{
+    if (request is null)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["request"] = ["Request body is required."]
+        });
+    }
+
+    var errors = new Dictionary<string, string[]>();
+
+    if (string.IsNullOrWhiteSpace(request.Name))
+    {
+        errors["name"] = ["Name is required."];
+    }
+
+    if (errors.Count > 0)
+    {
+        return Results.ValidationProblem(errors);
+    }
+
+    try
+    {
+        var account = await service.UpdateAccountAsync(id, request, cancellationToken);
+        return Results.Ok(account);
+    }
+    catch (KeyNotFoundException)
+    {
+        return Results.NotFound();
+    }
+});
+
+app.MapDelete("/api/accounts/{id:guid}", async (
+    Guid id,
+    AccountApplicationService service,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        await service.DeleteAccountAsync(id, cancellationToken);
+        return Results.NoContent();
+    }
+    catch (KeyNotFoundException)
+    {
+        return Results.NotFound();
+    }
+});
+
+app.MapGet("/api/accounts/{id:guid}/transactions", async (
+    Guid id,
+    AccountApplicationService service,
+    CancellationToken cancellationToken) =>
+{
+    var transactions = await service.GetAccountTransactionsAsync(id, cancellationToken);
+    return Results.Ok(transactions);
+});
+
 app.MapPost("/api/import/cba/{accountId:guid}", async (
     Guid accountId,
     IFormFile? file,
     CbaCsvImporter importer,
+    CancellationToken cancellationToken) =>
+{
+    if (file is null || file.Length == 0)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["file"] = ["A non-empty CSV file is required."]
+        });
+    }
+
+    await using var stream = file.OpenReadStream();
+    var result = await importer.ImportAsync(accountId, stream, cancellationToken);
+    return Results.Ok(result);
+})
+.DisableAntiforgery();
+
+app.MapPost("/api/import/coles/{accountId:guid}", async (
+    Guid accountId,
+    IFormFile? file,
+    ColesCreditCardCsvImporter importer,
     CancellationToken cancellationToken) =>
 {
     if (file is null || file.Length == 0)

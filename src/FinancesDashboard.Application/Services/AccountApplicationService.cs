@@ -37,4 +37,42 @@ public sealed class AccountApplicationService(FinancesDashboardDbContext dbConte
 
         return new AccountDto(account.Id, account.Name, account.Type.ToString(), account.IsActive);
     }
+
+    public async Task<AccountDto> UpdateAccountAsync(Guid id, UpdateAccountRequest request, CancellationToken cancellationToken)
+    {
+        var account = await dbContext.Accounts.FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+        if (account is null)
+        {
+            throw new KeyNotFoundException($"Account with id '{id}' not found.");
+        }
+
+        account.Name = request.Name;
+        account.IsActive = request.IsActive;
+
+        dbContext.Accounts.Update(account);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return new AccountDto(account.Id, account.Name, account.Type.ToString(), account.IsActive);
+    }
+
+    public async Task DeleteAccountAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var account = await dbContext.Accounts.FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+        if (account is null)
+        {
+            throw new KeyNotFoundException($"Account with id '{id}' not found.");
+        }
+
+        dbContext.Accounts.Remove(account);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Transaction>> GetAccountTransactionsAsync(Guid accountId, CancellationToken cancellationToken)
+    {
+        return await dbContext.Transactions
+            .AsNoTracking()
+            .Where(t => t.AccountId == accountId)
+            .OrderByDescending(t => t.Date)
+            .ToListAsync(cancellationToken);
+    }
 }

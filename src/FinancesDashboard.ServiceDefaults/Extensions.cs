@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.ServiceDiscovery;
 using OpenTelemetry;
@@ -29,7 +30,18 @@ public static class Extensions
         builder.Services.ConfigureHttpClientDefaults(http =>
         {
             // Turn on resilience by default
-            http.AddStandardResilienceHandler();
+            http.AddStandardResilienceHandler(options =>
+            {
+                // Increase timeout from default 10 seconds to 1 minute
+                //options.AttemptTimeout = new HttpTimeoutStrategyOptions
+                //{
+                //    Timeout = TimeSpan.FromMinutes(1)
+                //};
+
+                // Change the total timeout allowed across all retry attempts
+                options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(60);
+
+            });
 
             // Turn on service discovery by default
             http.AddServiceDiscovery();

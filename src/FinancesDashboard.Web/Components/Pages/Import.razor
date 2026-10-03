@@ -1,10 +1,11 @@
 @page "/import"
 
 @inject FinancesApiClient ApiClient
+@inject ILogger<Import> Logger
 
 <PageTitle>Import</PageTitle>
 
-<h1>Import CBA CSV</h1>
+<h1>Import CSV</h1>
 
 @if (isLoading)
 {
@@ -24,6 +25,7 @@ else
 {
     <div class="card">
         <div class="card-body">
+            
             <div class="mb-3">
                 <label class="form-label" for="import-account">Account</label>
                 <select id="import-account" class="form-select" @bind="selectedAccountId">
@@ -34,6 +36,16 @@ else
                     }
                 </select>
             </div>
+
+            <div class="mb-3">
+                <label class="form-label" for="import-type">Data Type</label>
+                <select id="import-type" class="form-select" @bind="selectedImportType">
+                    <option value="">Select data type</option>
+                    <option value="cba">CBA Bank Account</option>
+                    <option value="coles">Coles Credit Card</option>
+                </select>
+            </div>
+
 
             <div class="mb-3">
                 <label class="form-label">CSV file</label>
@@ -80,9 +92,14 @@ else
     private string? loadError;
     private string? importError;
     private string? selectedAccountId;
-    private IBrowserFile? selectedFile;
+    private string? selectedImportType;
+    private IBrowserFile? pendingFile;
+    private byte[]? selectedFileBytes;
     private string? selectedFileName;
     private ImportResultModel? importResult;
+
+    [Microsoft.AspNetCore.Components.SupplyParameterFromQuery(Name = "accountId")]
+    public string? AccountIdFromQuery { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -98,6 +115,11 @@ else
         {
             var result = await ApiClient.GetAccountsAsync();
             accounts = result.OrderBy(account => account.Name).ToList();
+
+            if (Guid.TryParse(AccountIdFromQuery, out var accountId) && accounts.Any(account => account.Id == accountId))
+            {
+                selectedAccountId = accountId.ToString();
+            }
         }
         catch (Exception ex)
         {
@@ -109,12 +131,76 @@ else
         }
     }
 
-    private void OnFileSelected(InputFileChangeEventArgs args)
+    private Task OnFileSelected(InputFileChangeEventArgs args)
     {
-        selectedFile = args.File;
-        selectedFileName = args.File.Name;
-        importResult = null;
-        importError = null;
+        Logger.LogInformation("OnFileSelected: Event fired");
+
+        try
+        {
+            if (args?.File == null)
+            {
+                importError = "No file selected";
+                pendingFile = null;
+                return Task.CompletedTask;
+            }
+
+            Logger.LogInformation("OnFileSelected: File detected - Name={FileName}, Size={FileSize}", args.File.Name, args.File.Size);
+            pendingFile = args.File;
+            selectedFileName = args.File.Name;
+            importResult = null;
+            importError = null;
+            Logger.LogInformation("OnFileSelected: File stored for later reading");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "OnFileSelected: Exception - {Message}", ex.Message);
+            importError = $"Error selecting file: {ex.Message}";
+            pendingFile = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task ReadFileAsync()
+    {
+        if (pendingFile == null)
+        {
+            return;
+        }
+
+        try
+        {
+            Logger.LogInformation("ReadFileAsync: Starting for {FileName}", pendingFile.Name);
+
+            const int maxFileSize = 10 * 1024 * 1024; // 10 MB
+            if (pendingFile.Size > maxFileSize)
+            {
+                importError = $"File exceeds 10 MB limit";
+                pendingFile = null;
+                selectedFileBytes = null;
+                return;
+            }
+
+            await using var stream = pendingFile.OpenReadStream(maxAllowedSize: maxFileSize);
+            Logger.LogInformation("ReadFileAsync: Stream opened");
+
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+
+            selectedFileBytes = memoryStream.ToArray();
+            importError = null;
+            Logger.LogInformation("ReadFileAsync: Complete - {ByteCount} bytes cached", selectedFileBytes.Length);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "ReadFileAsync: Failed - {Message}", ex.Message);
+            importError = $"Error reading file: {ex.Message}";
+            selectedFileBytes = null;
+        }
+        finally
+        {
+            pendingFile = null;
+        }
     }
 
     private async Task ImportAsync()
@@ -122,13 +208,19 @@ else
         importError = null;
         importResult = null;
 
+        if (string.IsNullOrWhiteSpace(selectedImportType))
+        {
+            importError = "Select a data type before importing.";
+            return;
+        }
+
         if (!Guid.TryParse(selectedAccountId, out var accountId))
         {
             importError = "Select an account before importing.";
             return;
         }
 
-        if (selectedFile is null)
+        if (selectedFileName == null)
         {
             importError = "Select a CSV file before importing.";
             return;
@@ -138,16 +230,39 @@ else
 
         try
         {
-            await using var stream = selectedFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
-            importResult = await ApiClient.ImportCbaAsync(accountId, stream, selectedFile.Name);
+            // If file bytes aren't cached yet, read them now
+            if (selectedFileBytes == null || selectedFileBytes.Length == 0)
+            {
+                Logger.LogInformation("ImportAsync: File not yet read, reading now");
+                await ReadFileAsync();
+            }
+
+            if (selectedFileBytes == null || selectedFileBytes.Length == 0)
+            {
+                importError = "Failed to read the selected file.";
+                return;
+            }
+
+            Logger.LogInformation("ImportAsync: Starting import with {ByteCount} bytes", selectedFileBytes.Length);
+            using var stream = new MemoryStream(selectedFileBytes);
+
+            importResult = selectedImportType switch
+            {
+                "cba" => await ApiClient.ImportCbaAsync(accountId, stream, selectedFileName),
+                "coles" => await ApiClient.ImportColesAsync(accountId, stream, selectedFileName),
+                _ => throw new InvalidOperationException($"Unknown import type: {selectedImportType}")
+            };
         }
         catch (Exception ex)
         {
+            Logger.LogError(ex, "ImportAsync: Failed - {Message}", ex.Message);
             importError = $"Import failed: {ex.Message}";
         }
         finally
         {
             isImporting = false;
+            selectedFileBytes = null;
+            selectedFileName = null;
         }
     }
 }

@@ -1,4 +1,6 @@
 ﻿@inherits LayoutComponentBase
+@inject ILogger<MainLayout> Logger
+@inject ClientErrorLogger ErrorLogger
 
 <div class="page">
     <div class="sidebar">
@@ -10,8 +12,18 @@
             <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
         </div>
 
+        @if (showErrorAlert && !string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger alert-dismissible fade show mx-4 mt-3" role="alert">
+                <strong>Error:</strong> @errorMessage
+                <button type="button" class="btn-close" @onclick="DismissError"></button>
+            </div>
+        }
+
         <article class="content px-4">
-            @Body
+            <ErrorBoundary @ref="errorBoundary" ErrorContent="@RenderErrorContent">
+                @Body
+            </ErrorBoundary>
         </article>
     </main>
 </div>
@@ -21,3 +33,32 @@
     <a href="" class="reload">Reload</a>
     <a class="dismiss">🗙</a>
 </div>
+
+@code {
+    private ErrorBoundary? errorBoundary;
+    private bool showErrorAlert;
+    private string? errorMessage;
+
+    private RenderFragment RenderErrorContent(Exception ex) => builder =>
+    {
+        errorMessage = ex.Message;
+        showErrorAlert = true;
+
+        // Log the error to the server
+        _ = ErrorLogger.LogExceptionAsync(ex, nameof(MainLayout));
+
+        Logger.LogError(ex, "An unhandled error occurred in MainLayout");
+
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "alert alert-danger");
+        builder.AddContent(2, $"An error occurred: {ex.Message}");
+        builder.CloseElement();
+    };
+
+    private void DismissError()
+    {
+        showErrorAlert = false;
+        errorMessage = null;
+        errorBoundary?.Recover();
+    }
+}
