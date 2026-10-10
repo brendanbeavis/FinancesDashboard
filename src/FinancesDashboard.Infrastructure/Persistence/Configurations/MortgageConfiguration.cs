@@ -12,16 +12,13 @@ public sealed class MortgageConfiguration : IEntityTypeConfiguration<Mortgage>
 
         builder.HasKey(mortgage => mortgage.Id);
 
-        builder.Property(mortgage => mortgage.Name)
+        builder.Property(mortgage => mortgage.AccountId)
             .IsRequired();
 
-        builder.Property(mortgage => mortgage.OriginalPrincipal)
-            .HasPrecision(18, 2)
-            .IsRequired();
-
-        builder.Property(mortgage => mortgage.CurrentPrincipal)
-            .HasPrecision(18, 2)
-            .IsRequired();
+        builder.HasOne<Account>()
+            .WithMany()
+            .HasForeignKey("AccountId")
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(mortgage => mortgage.AnnualInterestRate)
             .HasPrecision(9, 6)
@@ -32,9 +29,6 @@ public sealed class MortgageConfiguration : IEntityTypeConfiguration<Mortgage>
             .IsRequired();
 
         builder.Property(mortgage => mortgage.RepaymentsPerYear)
-            .IsRequired();
-
-        builder.Property(mortgage => mortgage.StartDate)
             .IsRequired();
     }
 }

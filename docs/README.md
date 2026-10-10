@@ -21,3 +21,7 @@ FinanceReport is a .NET 10 / C# personal finance reporting application using Bla
 ## First Vertical Slice
 
 Create Account -> Upload CBA CSV -> Import Transactions -> View Current Balance -> View Balance History.
+
+## Charting Notes
+
+The mortgage UI uses `Blazor-ApexCharts` (`Blazor-ApexCharts` NuGet package) for the interactive mortgage balance chart. The package is registered through `builder.Services.AddApexCharts()` in the Blazor web app and imported via `@using ApexCharts` in component imports. It was selected because it is a maintained Blazor charting library that supports responsive datetime line charts, dashed forecast styling, tooltips, and annotations without requiring a custom manual SVG/canvas chart implementation.

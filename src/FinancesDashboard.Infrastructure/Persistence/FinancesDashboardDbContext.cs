@@ -16,6 +16,8 @@ public sealed class FinancesDashboardDbContext(DbContextOptions<FinancesDashboar
 
     public DbSet<Mortgage> Mortgages => Set<Mortgage>();
 
+    public DbSet<MortgageOffsetAccount> MortgageOffsetAccounts => Set<MortgageOffsetAccount>();
+
     public DbSet<InterestRatePeriod> InterestRatePeriods => Set<InterestRatePeriod>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -25,6 +27,7 @@ public sealed class FinancesDashboardDbContext(DbContextOptions<FinancesDashboar
         modelBuilder.ApplyConfiguration(new AccountGroupConfiguration());
         modelBuilder.ApplyConfiguration(new AccountGroupMemberConfiguration());
         modelBuilder.ApplyConfiguration(new MortgageConfiguration());
+        modelBuilder.ApplyConfiguration(new MortgageOffsetAccountConfiguration());
         modelBuilder.ApplyConfiguration(new InterestRatePeriodConfiguration());
 
         base.OnModelCreating(modelBuilder);

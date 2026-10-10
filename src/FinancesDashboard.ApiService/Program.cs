@@ -32,10 +32,14 @@ builder.Services.AddSingleton(forecastOptions);
 builder.Services.AddSingleton(mortgageProjectionOptions);
 builder.Services.AddScoped<IForecastStrategy, AverageMonthlyNetCashflowForecastStrategy>();
 builder.Services.AddScoped<MortgageAmortizationService>();
+builder.Services.AddScoped<MortgageHistoryAnalysisService>();
+builder.Services.AddScoped<RepaymentAnalysisService>();
+builder.Services.AddScoped<MortgageAmortizationForecastService>();
 
 builder.Services.AddScoped<CbaCsvImporter>();
 builder.Services.AddScoped<ColesCreditCardCsvImporter>();
 builder.Services.AddScoped<AccountApplicationService>();
+builder.Services.AddScoped<CreditCardPositionService>();
 builder.Services.AddScoped<DashboardApplicationService>();
 builder.Services.AddScoped<MortgageApplicationService>();
 
@@ -154,11 +158,59 @@ app.MapDelete("/api/accounts/{id:guid}", async (
 
 app.MapGet("/api/accounts/{id:guid}/transactions", async (
     Guid id,
+    [FromQuery] DateOnly? dateFrom,
+    [FromQuery] DateOnly? dateTo,
+    [FromQuery] string? descriptionContains,
+    [FromQuery] decimal? minAmount,
+    [FromQuery] decimal? maxAmount,
+    [FromQuery] string? transactionDirection,
+    [FromQuery] string? sortBy,
+    [FromQuery] string? sortOrder,
     AccountApplicationService service,
     CancellationToken cancellationToken) =>
 {
-    var transactions = await service.GetAccountTransactionsAsync(id, cancellationToken);
+    var filter = new TransactionQueryFilterRequest
+    {
+        AccountId = id,
+        DateFrom = dateFrom,
+        DateTo = dateTo,
+        DescriptionContains = descriptionContains,
+        MinAmount = minAmount,
+        MaxAmount = maxAmount,
+        TransactionDirection = transactionDirection,
+        SortBy = sortBy,
+        SortOrder = sortOrder
+    };
+
+    var (isValid, errors) = filter.Validate();
+    if (!isValid)
+    {
+        var problemDict = new Dictionary<string, string[]>();
+        for (int i = 0; i < errors.Count; i++)
+        {
+            problemDict[$"validation_{i}"] = new[] { errors[i] };
+        }
+        return Results.ValidationProblem(problemDict);
+    }
+
+    var transactions = await service.GetAccountTransactionsAsync(filter, cancellationToken);
     return Results.Ok(transactions);
+});
+
+app.MapDelete("/api/transactions/{transactionId:guid}", async (
+    Guid transactionId,
+    AccountApplicationService service,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        await service.DeleteTransactionAsync(transactionId, cancellationToken);
+        return Results.NoContent();
+    }
+    catch (KeyNotFoundException)
+    {
+        return Results.NotFound();
+    }
 });
 
 app.MapPost("/api/import/cba/{accountId:guid}", async (
@@ -247,6 +299,12 @@ app.MapGet("/api/dashboard/credit-card-spend", async (DashboardApplicationServic
     return Results.Ok(points);
 });
 
+app.MapGet("/api/dashboard/account-summaries", async (DashboardApplicationService service, CancellationToken cancellationToken) =>
+{
+    var summaries = await service.GetAccountSummariesAsync(cancellationToken);
+    return Results.Ok(summaries);
+});
+
 app.MapGet("/api/dashboard/forecast", async (
     [FromQuery] Guid? accountId,
     [FromQuery] int? months,
@@ -280,6 +338,12 @@ app.MapGet("/api/mortgages", async (MortgageApplicationService service, Cancella
     return Results.Ok(mortgages);
 });
 
+app.MapGet("/api/mortgages/accounts", async (AccountApplicationService service, CancellationToken cancellationToken) =>
+{
+    var accounts = await service.GetAccountsByTypeAsync(AccountType.Mortgage, cancellationToken);
+    return Results.Ok(accounts);
+});
+
 app.MapPost("/api/mortgages", async (
     [FromBody] CreateMortgageRequest? request,
     MortgageApplicationService service,
@@ -295,19 +359,9 @@ app.MapPost("/api/mortgages", async (
 
     var errors = new Dictionary<string, string[]>();
 
-    if (string.IsNullOrWhiteSpace(request.Name))
+    if (request.AccountId == Guid.Empty)
     {
-        errors["name"] = ["Name is required."];
-    }
-
-    if (request.OriginalPrincipal < 0m)
-    {
-        errors["originalPrincipal"] = ["OriginalPrincipal must be zero or greater."];
-    }
-
-    if (request.CurrentPrincipal < 0m)
-    {
-        errors["currentPrincipal"] = ["CurrentPrincipal must be zero or greater."];
+        errors["accountId"] = ["AccountId is required and must be a valid GUID."];
     }
 
     if (request.AnnualInterestRate < 0m)
@@ -315,19 +369,9 @@ app.MapPost("/api/mortgages", async (
         errors["annualInterestRate"] = ["AnnualInterestRate must be zero or greater."];
     }
 
-    if (request.ScheduledRepayment < 0m)
-    {
-        errors["scheduledRepayment"] = ["ScheduledRepayment must be zero or greater."];
-    }
-
-    if (request.RepaymentsPerYear <= 0)
-    {
-        errors["repaymentsPerYear"] = ["RepaymentsPerYear must be greater than zero."];
-    }
-
     if (request.InterestRateHistory is null)
     {
-        errors["interestRateHistory"] = ["InterestRateHistory is required (empty list is allowed)."];
+        errors["interestRateHistory"] = ["InterestRateHistory is required (empty list is allowed)."]; 
     }
     else
     {
@@ -347,13 +391,150 @@ app.MapPost("/api/mortgages", async (
         }
     }
 
+    if (request.OffsetAccountIds is null)
+    {
+        errors["offsetAccountIds"] = ["OffsetAccountIds is required (empty list is allowed)."]; 
+    }
+
     if (errors.Count > 0)
     {
         return Results.ValidationProblem(errors);
     }
 
-    var mortgage = await service.CreateMortgageAsync(request, cancellationToken);
-    return Results.Created($"/api/mortgages/{mortgage.Id}", mortgage);
+    try
+    {
+        var mortgage = await service.CreateMortgageAsync(request, cancellationToken);
+        return Results.Created($"/api/mortgages/{mortgage.Id}", mortgage);
+    }
+    catch (KeyNotFoundException ex)
+    {
+        return Results.NotFound(new { error = ex.Message });
+    }
+});
+
+app.MapPut("/api/mortgages/{accountId}/offset-accounts", async (
+    Guid accountId,
+    [FromBody] UpdateMortgageOffsetAccountsRequest? request,
+    MortgageApplicationService service,
+    CancellationToken cancellationToken) =>
+{
+    if (request is null)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["request"] = new[] { "Request body is required." }
+        });
+    }
+
+    if (request.OffsetAccountIds is null)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["offsetAccountIds"] = new[] { "OffsetAccountIds is required (empty list is allowed)." }
+        });
+    }
+
+    try
+    {
+        var summary = await service.UpdateMortgageOffsetAccountsAsync(accountId, request, cancellationToken);
+        return Results.Ok(summary);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["offsetAccountIds"] = new[] { ex.Message }
+        });
+    }
+    catch (KeyNotFoundException ex)
+    {
+        return Results.NotFound(new { error = ex.Message });
+    }
+});
+
+app.MapPost("/api/mortgages/{accountId}/forecast", async (
+    Guid accountId,
+    [FromBody] MortgageForecastRequest? request,
+    MortgageApplicationService service,
+    CancellationToken cancellationToken) =>
+{
+    if (request is null)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["request"] = ["Request body is required."]
+        });
+    }
+
+    var errors = new Dictionary<string, string[]>();
+
+    if (request.AnnualInterestRate < 0m)
+    {
+        errors["annualInterestRate"] = ["AnnualInterestRate must be zero or greater."];
+    }
+
+    if (request.RepaymentAmount < 0m)
+    {
+        errors["repaymentAmount"] = ["RepaymentAmount must be zero or greater."];
+    }
+
+    if (request.RepaymentsPerYear < 0)
+    {
+        errors["repaymentsPerYear"] = ["RepaymentsPerYear must be zero or greater."];
+    }
+
+    if (errors.Count > 0)
+    {
+        return Results.ValidationProblem(errors);
+    }
+
+    try
+    {
+        var forecast = await service.GenerateEphemeralForecastAsync(accountId, request, cancellationToken);
+        return Results.Ok(forecast);
+    }
+    catch (KeyNotFoundException ex)
+    {
+        return Results.NotFound(new { error = ex.Message });
+    }
+});
+
+app.MapGet("/api/mortgages/{accountId}/history", async (
+    Guid accountId,
+    DateOnly? startDate,
+    DateOnly? endDate,
+    MortgageHistoryAnalysisService service,
+    CancellationToken cancellationToken) =>
+{
+    var history = await service.GetHistoryAsync(accountId, startDate, endDate, cancellationToken);
+    return Results.Ok(history);
+});
+
+app.MapGet("/api/mortgages/{accountId}/summary", async (
+    Guid accountId,
+    DateOnly? startDate,
+    DateOnly? endDate,
+    MortgageApplicationService service,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var summary = await service.GetMortgageCurrentPositionAsync(accountId, startDate, endDate, cancellationToken);
+        return Results.Ok(summary);
+    }
+    catch (KeyNotFoundException ex)
+    {
+        return Results.NotFound(new { error = ex.Message });
+    }
+});
+
+app.MapGet("/api/mortgages/{accountId}/current-balance", async (
+    Guid accountId,
+    MortgageHistoryAnalysisService service,
+    CancellationToken cancellationToken) =>
+{
+    var balance = await service.GetCurrentBalanceAsync(accountId, cancellationToken);
+    return Results.Ok(new { currentBalance = balance });
 });
 
 app.MapDefaultEndpoints();

@@ -1,12 +1,7 @@
 namespace FinancesDashboard.Web.Models;
 
 public sealed record CreateMortgageRequestModel(
-    string Name,
-    decimal OriginalPrincipal,
-    decimal CurrentPrincipal,
+    Guid AccountId,
     decimal AnnualInterestRate,
-    decimal ScheduledRepayment,
-    int RepaymentsPerYear,
-    DateOnly StartDate,
-    DateOnly? ExpectedEndDate,
-    IReadOnlyList<InterestRatePeriodModel> InterestRateHistory);
+    IReadOnlyList<InterestRatePeriodModel> InterestRateHistory,
+    IReadOnlyList<Guid> OffsetAccountIds);

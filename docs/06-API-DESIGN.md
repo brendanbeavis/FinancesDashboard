@@ -6,13 +6,20 @@
 - `GET /api/accounts`
 - `POST /api/accounts`
 - `POST /api/import/cba/{accountId}`
+- `POST /api/import/coles/{accountId}`
 - `GET /api/dashboard/summary`
 - `GET /api/dashboard/balance?accountId=...`
 - `GET /api/dashboard/cashflow?accountId=...`
 - `GET /api/dashboard/credit-card-spend`
 - `GET /api/dashboard/forecast?accountId=...&months=...`
+- `GET /api/dashboard/account-summaries`
 - `GET /api/mortgages`
+- `GET /api/mortgages/accounts`
 - `POST /api/mortgages`
+- `PUT /api/mortgages/{accountId}/offset-accounts`
+- `POST /api/mortgages/{accountId}/forecast`
+- `GET /api/accounts/{accountId}/transactions`
+- `DELETE /api/transactions/{transactionId}`
 
 ## DTOs
 

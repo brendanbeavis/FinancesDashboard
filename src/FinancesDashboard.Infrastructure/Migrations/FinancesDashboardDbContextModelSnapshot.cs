@@ -94,23 +94,11 @@ namespace FinancesDashboard.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("TEXT");
+
                     b.Property<decimal>("AnnualInterestRate")
                         .HasPrecision(9, 6)
-                        .HasColumnType("TEXT");
-
-                    b.Property<decimal>("CurrentPrincipal")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateOnly?>("ExpectedEndDate")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<decimal>("OriginalPrincipal")
-                        .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("RepaymentsPerYear")
@@ -120,12 +108,26 @@ namespace FinancesDashboard.Infrastructure.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
 
-                    b.Property<DateOnly>("StartDate")
-                        .HasColumnType("TEXT");
-
                     b.HasKey("Id");
 
+                    b.HasIndex("AccountId");
+
                     b.ToTable("Mortgages", (string)null);
+                });
+
+            modelBuilder.Entity("FinancesDashboard.Domain.Models.MortgageOffsetAccount", b =>
+                {
+                    b.Property<Guid>("MortgageAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OffsetAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("MortgageAccountId", "OffsetAccountId");
+
+                    b.HasIndex("OffsetAccountId");
+
+                    b.ToTable("MortgageOffsetAccounts", (string)null);
                 });
 
             modelBuilder.Entity("FinancesDashboard.Domain.Models.Transaction", b =>
@@ -194,6 +196,30 @@ namespace FinancesDashboard.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("MortgageId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FinancesDashboard.Domain.Models.Mortgage", b =>
+                {
+                    b.HasOne("FinancesDashboard.Domain.Models.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FinancesDashboard.Domain.Models.MortgageOffsetAccount", b =>
+                {
+                    b.HasOne("FinancesDashboard.Domain.Models.Account", null)
+                        .WithMany()
+                        .HasForeignKey("MortgageAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("FinancesDashboard.Domain.Models.Account", null)
+                        .WithMany()
+                        .HasForeignKey("OffsetAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

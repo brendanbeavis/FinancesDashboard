@@ -11,6 +11,122 @@
 
 <h1>@AccountName Transactions</h1>
 
+@if (IsLoadingSummary)
+{
+    <p><em>Loading financial summary...</em></p>
+}
+else if (!string.IsNullOrWhiteSpace(SummaryError))
+{
+    <div class="alert alert-warning">@SummaryError</div>
+}
+else if (DashboardSummary is not null)
+{
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <div class="text-muted">Overall Net Position</div>
+                    <div class="h4">@FormatCurrency(DashboardSummary.CurrentNetPosition)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <div class="text-muted">@(SelectedAccountSummary?.AccountName ?? AccountName) Position</div>
+                    <div class="h4">
+                        @if (SelectedAccountSummary is not null)
+                        {
+                            @if (SelectedAccountSummary.IsLiability)
+                            {
+                                <span class="badge bg-danger">@FormatCurrency(SelectedAccountSummary.CurrentPosition) owing</span>
+                            }
+                            else
+                            {
+                                @FormatCurrency(SelectedAccountSummary.CurrentPosition)
+                            }
+                        }
+                        else
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!--Filter and Sort Section-->
+<div class="card mb-4">
+    <div class="card-body">
+        <h5 class="card-title">Filter &amp; Sort</h5>
+        <form @onsubmit="ApplyFilters">
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <label class="form-label">From Date</label>
+                    <input type="date" class="form-control" @bind="FilterDateFrom" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">To Date</label>
+                    <input type="date" class="form-control" @bind="FilterDateTo" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Description</label>
+                    <input type="text" class="form-control" placeholder="Contains..." @bind="FilterDescription" />
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-2">
+                    <label class="form-label">Min Amount</label>
+                    <input type="number" step="0.01" class="form-control" @bind="FilterMinAmount" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Max Amount</label>
+                    <input type="number" step="0.01" class="form-control" @bind="FilterMaxAmount" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Direction</label>
+                    <select class="form-select" @bind="FilterDirection">
+                        <option value="All">All</option>
+                        <option value="Positive">Income</option>
+                        <option value="Negative">Expense</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Sort By</label>
+                    <select class="form-select" @bind="SortColumn">
+                        <option value="Date">Date</option>
+                        <option value="Description">Description</option>
+                        <option value="Amount">Amount</option>
+                        <option value="BankBalance">Balance</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Order</label>
+                    <select class="form-select" @bind="SortOrder">
+                        <option value="Desc">Desc</option>
+                        <option value="Asc">Asc</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">Apply</button>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-12">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="ResetFilters">Clear Filters</button>
+                    <span class="ms-3 text-muted">Showing @transactions.Count transaction(s)</span>
+                    @if (transactions.Count > 0)
+                    {
+                        <span class="ms-2 text-muted">| Total: @FormatCurrency(transactions.Sum(t => t.Amount))</span>
+                    }
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
 @if (IsLoading)
 {
     <p><em>Loading transactions...</em></p>
@@ -29,11 +145,12 @@ else
         <table class="table table-striped">
             <thead>
                 <tr>
-                    <th>Date</th>
-                    <th>Description</th>
-                    <th>Amount</th>
-                    <th>Bank Balance</th>
+                    <th><a href="#" @onclick:preventDefault @onclick="@(() => UpdateSort("Date"))" style="cursor: pointer; text-decoration: none;">Date @GetSortIndicator("Date")</a></th>
+                    <th><a href="#" @onclick:preventDefault @onclick="@(() => UpdateSort("Description"))" style="cursor: pointer; text-decoration: none;">Description @GetSortIndicator("Description")</a></th>
+                    <th><a href="#" @onclick:preventDefault @onclick="@(() => UpdateSort("Amount"))" style="cursor: pointer; text-decoration: none;">Amount @GetSortIndicator("Amount")</a></th>
+                    <th><a href="#" @onclick:preventDefault @onclick="@(() => UpdateSort("BankBalance"))" style="cursor: pointer; text-decoration: none;">Bank Balance @GetSortIndicator("BankBalance")</a></th>
                     <th>Imported</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -49,12 +166,23 @@ else
                         </td>
                         <td class="text-end">@transaction.BankBalance.ToString("C")</td>
                         <td>@transaction.ImportedUtc.ToString("g")</td>
+                        <td>
+                            <button class="btn btn-sm btn-danger" @onclick="() => OnDeleteClick(transaction)" title="Delete this transaction">
+                                Delete
+                            </button>
+                        </td>
                     </tr>
                 }
             </tbody>
         </table>
     </div>
 }
+
+<TransactionConfirmDeleteModal 
+    IsVisible="ShowDeleteModal"
+    Transaction="SelectedTransaction"
+    OnDeleteAsync="HandleConfirmDelete"
+    OnClose="HandleDeleteModalClose" />
 
 @code {
     [Parameter]
@@ -64,10 +192,29 @@ else
     private bool IsLoading = true;
     private string? LoadError;
     private string AccountName = "Unknown";
+    private bool ShowDeleteModal = false;
+    private TransactionModel? SelectedTransaction;
+
+    // Summary fields
+    private DashboardSummaryModel? DashboardSummary;
+    private AccountDashboardSummaryModel? SelectedAccountSummary;
+    private bool IsLoadingSummary = false;
+    private string? SummaryError;
+
+    // Filter fields
+    private DateTime? FilterDateFrom;
+    private DateTime? FilterDateTo;
+    private string FilterDescription = "";
+    private decimal? FilterMinAmount;
+    private decimal? FilterMaxAmount;
+    private string FilterDirection = "All";
+    private string SortColumn = "Date";
+    private string SortOrder = "Desc";
 
     protected override async Task OnInitializedAsync()
     {
         await LoadAccountsAsync();
+        await LoadSummariesAsync();
     }
 
     private async Task LoadAccountsAsync()
@@ -87,7 +234,7 @@ else
             }
 
             AccountName = account.Name;
-            transactions = (await ApiClient.GetAccountTransactionsAsync(AccountId)).ToList();
+            await LoadTransactionsAsync();
         }
         catch (Exception ex)
         {
@@ -97,5 +244,130 @@ else
         {
             IsLoading = false;
         }
+    }
+
+    private async Task LoadTransactionsAsync()
+    {
+        try
+        {
+            var dateFrom = FilterDateFrom.HasValue ? DateOnly.FromDateTime(FilterDateFrom.Value) : (DateOnly?)null;
+            var dateTo = FilterDateTo.HasValue ? DateOnly.FromDateTime(FilterDateTo.Value) : (DateOnly?)null;
+
+            transactions = (await ApiClient.GetAccountTransactionsAsync(
+                AccountId,
+                dateFrom,
+                dateTo,
+                string.IsNullOrWhiteSpace(FilterDescription) ? null : FilterDescription,
+                FilterMinAmount,
+                FilterMaxAmount,
+                FilterDirection == "All" ? null : FilterDirection,
+                SortColumn,
+                SortOrder)).ToList();
+        }
+        catch (Exception ex)
+        {
+            LoadError = $"Unable to load transactions: {ex.Message}";
+        }
+    }
+
+    private async Task LoadSummariesAsync()
+    {
+        IsLoadingSummary = true;
+        SummaryError = null;
+
+        try
+        {
+            DashboardSummary = await ApiClient.GetDashboardSummaryAsync();
+            var accountSummaries = await ApiClient.GetAccountSummariesAsync();
+            SelectedAccountSummary = accountSummaries.FirstOrDefault(s => s.AccountId == AccountId);
+        }
+        catch (Exception ex)
+        {
+            SummaryError = $"Unable to load financial summary: {ex.Message}";
+        }
+        finally
+        {
+            IsLoadingSummary = false;
+        }
+    }
+
+    private void OnDeleteClick(TransactionModel transaction)
+    {
+        SelectedTransaction = transaction;
+        ShowDeleteModal = true;
+    }
+
+    private async Task HandleConfirmDelete()
+    {
+        if (SelectedTransaction is null)
+            return;
+
+        try
+        {
+            await ApiClient.DeleteTransactionAsync(SelectedTransaction.Id);
+            transactions.Remove(SelectedTransaction);
+            ShowDeleteModal = false;
+            SelectedTransaction = null;
+            await LoadSummariesAsync();
+        }
+        catch (Exception ex)
+        {
+            LoadError = $"Unable to delete transaction: {ex.Message}";
+        }
+    }
+
+    private Task HandleDeleteModalClose(bool cancelled)
+    {
+        ShowDeleteModal = false;
+        SelectedTransaction = null;
+        return Task.CompletedTask;
+    }
+
+    private async Task ApplyFilters()
+    {
+        IsLoading = true;
+        await LoadTransactionsAsync();
+        IsLoading = false;
+    }
+
+    private async Task ResetFilters()
+    {
+        FilterDateFrom = null;
+        FilterDateTo = null;
+        FilterDescription = "";
+        FilterMinAmount = null;
+        FilterMaxAmount = null;
+        FilterDirection = "All";
+        SortColumn = "Date";
+        SortOrder = "Desc";
+        await ApplyFilters();
+    }
+
+    private void UpdateSort(string column)
+    {
+        if (SortColumn == column)
+        {
+            SortOrder = SortOrder == "Desc" ? "Asc" : "Desc";
+        }
+        else
+        {
+            SortColumn = column;
+            SortOrder = "Desc";
+        }
+        IsLoading = true;
+        _ = LoadTransactionsAsync();
+        IsLoading = false;
+    }
+
+    private string GetSortIndicator(string column)
+    {
+        if (SortColumn != column)
+            return "";
+        return SortOrder == "Asc" ? "↑" : "↓";
+    }
+
+    private string FormatCurrency(decimal value)
+    {
+        return value.ToString("C");
     }
 }

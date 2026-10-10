@@ -99,29 +99,22 @@ public class DomainModelTests
     public void Mortgage_CanAssignAllProperties()
     {
         var id = Guid.NewGuid();
+        var accountId = Guid.NewGuid();
 
         var mortgage = new Mortgage
         {
             Id = id,
-            Name = "Home Loan",
-            OriginalPrincipal = 600000m,
-            CurrentPrincipal = 550000m,
+            AccountId = accountId,
             AnnualInterestRate = 0.0615m,
             ScheduledRepayment = 3200m,
-            RepaymentsPerYear = 12,
-            StartDate = new DateOnly(2024, 7, 1),
-            ExpectedEndDate = new DateOnly(2054, 7, 1)
+            RepaymentsPerYear = 12
         };
 
         Assert.Equal(id, mortgage.Id);
-        Assert.Equal("Home Loan", mortgage.Name);
-        Assert.Equal(600000m, mortgage.OriginalPrincipal);
-        Assert.Equal(550000m, mortgage.CurrentPrincipal);
+        Assert.Equal(accountId, mortgage.AccountId);
         Assert.Equal(0.0615m, mortgage.AnnualInterestRate);
         Assert.Equal(3200m, mortgage.ScheduledRepayment);
         Assert.Equal(12, mortgage.RepaymentsPerYear);
-        Assert.Equal(new DateOnly(2024, 7, 1), mortgage.StartDate);
-        Assert.Equal(new DateOnly(2054, 7, 1), mortgage.ExpectedEndDate);
     }
 
     [Fact]

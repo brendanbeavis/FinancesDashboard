@@ -23,6 +23,7 @@ public sealed class SqlitePersistenceIntegrationTests
         Assert.Contains("AccountGroups", tableNames);
         Assert.Contains("AccountGroupMembers", tableNames);
         Assert.Contains("Mortgages", tableNames);
+        Assert.Contains("MortgageOffsetAccounts", tableNames);
         Assert.Contains("InterestRatePeriods", tableNames);
 
         var indexRows = await GetTransactionIndexesAsync(connection);

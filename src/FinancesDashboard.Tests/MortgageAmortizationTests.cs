@@ -11,9 +11,13 @@ public sealed class MortgageAmortizationTests
     {
         var service = new MortgageAmortizationService(new MortgageProjectionOptions { HorizonPeriods = 12 });
 
-        var mortgage = CreateMortgage(currentPrincipal: 1000m, annualInterestRate: 0.12m, scheduledRepayment: 200m);
-
-        var projection = service.BuildProjection(mortgage, []);
+        var projection = service.BuildProjection(
+            currentPrincipal: 1000m,
+            startDate: new DateOnly(2026, 1, 1),
+            annualInterestRate: 0.12m,
+            scheduledRepayment: 200m,
+            repaymentsPerYear: 12,
+            rateHistory: []);
 
         var first = projection.AmortisationSchedule[0];
         Assert.Equal(10m, first.InterestAmount);
@@ -27,9 +31,13 @@ public sealed class MortgageAmortizationTests
     {
         var service = new MortgageAmortizationService(new MortgageProjectionOptions { HorizonPeriods = 12 });
 
-        var mortgage = CreateMortgage(currentPrincipal: 1000m, annualInterestRate: 0.12m, scheduledRepayment: 600m);
-
-        var projection = service.BuildProjection(mortgage, []);
+        var projection = service.BuildProjection(
+            currentPrincipal: 1000m,
+            startDate: new DateOnly(2026, 1, 1),
+            annualInterestRate: 0.12m,
+            scheduledRepayment: 600m,
+            repaymentsPerYear: 12,
+            rateHistory: []);
 
         Assert.Equal(2, projection.AmortisationSchedule.Count);
         Assert.Equal(new DateOnly(2026, 2, 1), projection.EstimatedPayoffDate);
@@ -46,26 +54,31 @@ public sealed class MortgageAmortizationTests
     {
         var service = new MortgageAmortizationService(new MortgageProjectionOptions { HorizonPeriods = 3 });
 
-        var mortgage = CreateMortgage(currentPrincipal: 1000m, annualInterestRate: 0.05m, scheduledRepayment: 100m);
         var rateHistory = new List<InterestRatePeriod>
         {
             new()
             {
-                MortgageId = mortgage.Id,
+                MortgageId = Guid.NewGuid(),
                 StartDate = new DateOnly(2026, 1, 1),
                 EndDate = new DateOnly(2026, 1, 31),
                 AnnualInterestRate = 0.12m
             },
             new()
             {
-                MortgageId = mortgage.Id,
+                MortgageId = Guid.NewGuid(),
                 StartDate = new DateOnly(2026, 2, 1),
                 EndDate = null,
                 AnnualInterestRate = 0.24m
             }
         };
 
-        var projection = service.BuildProjection(mortgage, rateHistory);
+        var projection = service.BuildProjection(
+            currentPrincipal: 1000m,
+            startDate: new DateOnly(2026, 1, 1),
+            annualInterestRate: 0.05m,
+            scheduledRepayment: 100m,
+            repaymentsPerYear: 12,
+            rateHistory: rateHistory);
 
         Assert.Equal(0.12m, projection.AmortisationSchedule[0].AnnualInterestRate);
         Assert.Equal(0.24m, projection.AmortisationSchedule[1].AnnualInterestRate);
@@ -75,21 +88,5 @@ public sealed class MortgageAmortizationTests
         Assert.Equal(18.20m, projection.AmortisationSchedule[1].InterestAmount);
         Assert.Equal(16.56m, projection.AmortisationSchedule[2].InterestAmount);
         Assert.Equal(44.76m, projection.TotalRemainingInterest);
-    }
-
-    private static Mortgage CreateMortgage(decimal currentPrincipal, decimal annualInterestRate, decimal scheduledRepayment)
-    {
-        return new Mortgage
-        {
-            Id = Guid.NewGuid(),
-            Name = "Mortgage",
-            OriginalPrincipal = currentPrincipal,
-            CurrentPrincipal = currentPrincipal,
-            AnnualInterestRate = annualInterestRate,
-            ScheduledRepayment = scheduledRepayment,
-            RepaymentsPerYear = 12,
-            StartDate = new DateOnly(2026, 1, 1),
-            ExpectedEndDate = null
-        };
     }
 }

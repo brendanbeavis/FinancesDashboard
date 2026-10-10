@@ -7,7 +7,16 @@ public sealed class MortgageAmortizationService(MortgageProjectionOptions option
 {
     private const string ProjectionAssumption = "Approximation using periodic interest and scheduled repayments; actual lender calculations may differ.";
 
-    public MortgageProjectionDto BuildProjection(Mortgage mortgage, IReadOnlyList<InterestRatePeriod> rateHistory)
+    /// <summary>
+    /// Build a mortgage amortization projection from explicitly provided parameters.
+    /// </summary>
+    public MortgageProjectionDto BuildProjection(
+        decimal currentPrincipal,
+        DateOnly startDate,
+        decimal annualInterestRate,
+        decimal scheduledRepayment,
+        int repaymentsPerYear,
+        IReadOnlyList<InterestRatePeriod> rateHistory)
     {
         var horizon = Math.Max(1, options.HorizonPeriods);
         var annualRatePeriods = rateHistory
@@ -15,8 +24,8 @@ public sealed class MortgageAmortizationService(MortgageProjectionOptions option
             .ToList();
 
         var schedule = new List<AmortisationPeriodDto>(horizon);
-        var openingPrincipal = decimal.Round(Math.Max(0m, mortgage.CurrentPrincipal), 2, MidpointRounding.AwayFromZero);
-        var periodDate = mortgage.StartDate;
+        var openingPrincipal = decimal.Round(Math.Max(0m, currentPrincipal), 2, MidpointRounding.AwayFromZero);
+        var periodDate = startDate;
         decimal totalRemainingInterest = 0m;
         DateOnly? payoffDate = null;
 
@@ -28,10 +37,10 @@ public sealed class MortgageAmortizationService(MortgageProjectionOptions option
                 break;
             }
 
-            var annualRate = ResolveAnnualRate(periodDate, mortgage.AnnualInterestRate, annualRatePeriods);
-            var periodicRate = annualRate / mortgage.RepaymentsPerYear;
+            var annualRate = ResolveAnnualRate(periodDate, annualInterestRate, annualRatePeriods);
+            var periodicRate = annualRate / repaymentsPerYear;
             var interestAmount = decimal.Round(openingPrincipal * periodicRate, 2, MidpointRounding.AwayFromZero);
-            var scheduledPayment = decimal.Round(Math.Max(0m, mortgage.ScheduledRepayment), 2, MidpointRounding.AwayFromZero);
+            var scheduledPayment = decimal.Round(Math.Max(0m, scheduledRepayment), 2, MidpointRounding.AwayFromZero);
 
             var rawPrincipalRepaid = scheduledPayment - interestAmount;
             var principalRepaid = rawPrincipalRepaid;
@@ -56,6 +65,8 @@ public sealed class MortgageAmortizationService(MortgageProjectionOptions option
                 periodNumber,
                 periodDate,
                 openingPrincipal,
+                0m,
+                openingPrincipal,
                 annualRate,
                 interestAmount,
                 decimal.Round(principalRepaid, 2, MidpointRounding.AwayFromZero),
@@ -65,7 +76,7 @@ public sealed class MortgageAmortizationService(MortgageProjectionOptions option
                 ProjectionAssumption));
 
             openingPrincipal = closingPrincipal;
-            periodDate = AdvancePeriodDate(periodDate, mortgage.RepaymentsPerYear);
+            periodDate = AdvancePeriodDate(periodDate, repaymentsPerYear);
         }
 
         return new MortgageProjectionDto(

@@ -150,7 +150,8 @@ public sealed class ForecastStrategyTests
         };
 
         var strategy = new AverageMonthlyNetCashflowForecastStrategy(options);
-        var service = new DashboardApplicationService(dbContext, strategy, options);
+        var creditCardPositionService = new CreditCardPositionService(dbContext);
+        var service = new DashboardApplicationService(dbContext, strategy, options, creditCardPositionService);
 
         var points = await service.GetForecastAsync(account.Id, 3, CancellationToken.None);
 

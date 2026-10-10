@@ -2,13 +2,16 @@ namespace FinancesDashboard.Web.Models;
 
 public sealed record MortgageModel(
     Guid Id,
-    string Name,
-    decimal OriginalPrincipal,
-    decimal CurrentPrincipal,
+    Guid AccountId,
+    string AccountName,
     decimal AnnualInterestRate,
-    decimal ScheduledRepayment,
-    int RepaymentsPerYear,
-    DateOnly StartDate,
-    DateOnly? ExpectedEndDate,
+    decimal? DetectedRepaymentAmount,
+    int? DetectedRepaymentsPerYear,
+    decimal LatestHistoricalBalance,
+    decimal TotalOffsetBalance,
+    decimal InterestBearingBalance,
+    DateOnly LatestHistoricalDate,
     IReadOnlyList<InterestRatePeriodModel> InterestRateHistory,
-    MortgageProjectionModel Projection);
+    IReadOnlyList<Guid> OffsetAccountIds,
+    MortgageProjectionModel Projection,
+    decimal DetectionConfidence = 0m);

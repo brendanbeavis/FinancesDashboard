@@ -27,6 +27,7 @@
     <ProjectReference Include="..\FinancesDashboard.Application\FinancesDashboard.Application.csproj" />
     <ProjectReference Include="..\FinancesDashboard.Domain\FinancesDashboard.Domain.csproj" />
     <ProjectReference Include="..\FinancesDashboard.Infrastructure\FinancesDashboard.Infrastructure.csproj" />
+    <ProjectReference Include="..\FinancesDashboard.Web\FinancesDashboard.Web.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,3 +1,4 @@
+using ApexCharts;
 using FinancesDashboard.Web;
 using FinancesDashboard.Web.Components;
 using FinancesDashboard.Web.Services;
@@ -15,15 +16,20 @@ builder.Services.AddRazorComponents()
 // Configure SignalR message size and form upload limits for file imports
 builder.Services.AddSignalR(options =>
 {
-    options.MaximumReceiveMessageSize = 10 * 1024 * 1024; // 10 MB
+    options.MaximumReceiveMessageSize = 5 * 1024 * 1024; // 5 MB
+
+    // Give users 1 minute to choose or cancel a file before breaking the circuit
+    options.ClientTimeoutInterval = TimeSpan.FromMinutes(1);
+    options.HandshakeTimeout = TimeSpan.FromMinutes(1);
 });
 
 builder.Services.Configure<FormOptions>(options =>
 {
-    options.MultipartBodyLengthLimit = 10 * 1024 * 1024; // 10 MB
+    options.MultipartBodyLengthLimit = 5 * 1024 * 1024; // 5 MB
 });
 
 builder.Services.AddOutputCache();
+builder.Services.AddApexCharts();
 
 builder.Services.AddHttpClient<FinancesApiClient>(client =>
     {

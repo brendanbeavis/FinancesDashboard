@@ -42,6 +42,24 @@ Provide account list, account type, active state, creation/editing, account hist
 
 Provide mortgage CRUD, rate history, projected payoff, remaining interest and amortisation chart.
 
+### Mortgage Charting
+
+- Selected library: `Blazor-ApexCharts`
+- NuGet package: `Blazor-ApexCharts` version `7.0.0`
+- Configuration required:
+  - Add the package to `src/FinancesDashboard.Web/FinancesDashboard.Web.csproj`
+  - Register `builder.Services.AddApexCharts()` in `src/FinancesDashboard.Web/Program.cs`
+  - Add `@using ApexCharts` to `src/FinancesDashboard.Web/Components/_Imports.razor`
+- Why selected:
+  - Maintained Blazor-compatible package with strong adoption
+  - Supports responsive line charts, datetime axes, shared tooltips, dashed forecast styling and annotations
+  - Avoids custom SVG/canvas chart implementation while fitting the existing interactive server Blazor app
+- Current mortgage chart behaviour:
+  - Historical mortgage balance is displayed as a solid line
+  - Forecast mortgage balance is displayed as a dashed line
+  - Historical and projected data are clearly separated
+  - A zero balance reference line is shown when supported by the chart options
+
 ## UI Principles
 
 - Financial calculations belong in application services, not components.

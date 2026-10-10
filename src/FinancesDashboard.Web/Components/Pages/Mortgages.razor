@@ -6,50 +6,6 @@
 
 <h1>Mortgages</h1>
 
-<div class="card mb-4">
-    <div class="card-body">
-        <h2 class="h5">Create mortgage</h2>
-
-        @if (!string.IsNullOrWhiteSpace(createError))
-        {
-            <div class="alert alert-danger">@createError</div>
-        }
-
-        <div class="row g-3">
-            <div class="col-md-6">
-                <label class="form-label">Name</label>
-                <input class="form-control" @bind="name" />
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Original Principal</label>
-                <input class="form-control" type="number" step="0.01" @bind="originalPrincipal" />
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Current Principal</label>
-                <input class="form-control" type="number" step="0.01" @bind="currentPrincipal" />
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Annual Rate</label>
-                <input class="form-control" type="number" step="0.0001" @bind="annualInterestRate" />
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Repayment</label>
-                <input class="form-control" type="number" step="0.01" @bind="scheduledRepayment" />
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Repayments/Year</label>
-                <input class="form-control" type="number" @bind="repaymentsPerYear" />
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Start Date</label>
-                <input class="form-control" type="date" @bind="startDate" />
-            </div>
-        </div>
-
-        <button class="btn btn-primary mt-3" @onclick="CreateMortgageAsync" disabled="@isCreating">@(isCreating ? "Creating..." : "Create mortgage")</button>
-    </div>
-</div>
-
 @if (isLoading)
 {
     <p><em>Loading mortgages...</em></p>
@@ -58,72 +14,367 @@ else if (!string.IsNullOrWhiteSpace(loadError))
 {
     <div class="alert alert-danger">@loadError</div>
 }
-else if (mortgages.Count == 0)
+else if (!mortgageAccounts.Any())
 {
-    <div class="alert alert-secondary">No mortgages yet.</div>
+    <div class="alert alert-info">
+        <p>No mortgage accounts found. Please create or import a mortgage account first.</p>
+        <p><a href="/accounts" class="btn btn-primary btn-sm">Go to Accounts</a></p>
+    </div>
 }
 else
 {
-    @foreach (var mortgage in mortgages)
-    {
-        <div class="card mb-3">
-            <div class="card-body">
-                <h3 class="h5">@mortgage.Name</h3>
-                <div><strong>Current Principal:</strong> @FormatCurrency(mortgage.CurrentPrincipal)</div>
-                <div><strong>Projected Balance:</strong> @FormatCurrency(mortgage.Projection.ProjectedBalance)</div>
-                <div><strong>Remaining Projected Interest:</strong> @FormatCurrency(mortgage.Projection.TotalRemainingInterest)</div>
-                <div><strong>Estimated Payoff Date:</strong> @(mortgage.Projection.EstimatedPayoffDate?.ToString("dd/MM/yyyy") ?? "Not reached in horizon")</div>
-                <div class="mt-2"><small class="text-muted">@mortgage.Projection.Assumption</small></div>
-
-                @if (mortgage.InterestRateHistory.Count > 0)
-                {
-                    <details class="mt-3">
-                        <summary>Rate history</summary>
-                        <ul class="mt-2">
-                            @foreach (var period in mortgage.InterestRateHistory.OrderBy(period => period.StartDate))
-                            {
-                                <li>@period.StartDate.ToString("dd/MM/yyyy") - @(period.EndDate?.ToString("dd/MM/yyyy") ?? "Current"): @period.AnnualInterestRate:P2</li>
-                            }
-                        </ul>
-                    </details>
-                }
+    <!-- Account Selector -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Mortgage Account</h5>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Select Account</label>
+                    <select class="form-select" @bind="selectedAccountId" @bind:after="OnAccountSelectedAsync">
+                        <option value="">-- Select a Mortgage Account --</option>
+                        @foreach (var account in mortgageAccounts)
+                        {
+                            <option value="@account.Id.ToString()">@account.Name</option>
+                        }
+                    </select>
+                </div>
             </div>
         </div>
+    </div>
+
+    <!-- Current Position -->
+    @if (selectedAccountId != string.Empty && selectedAccount is not null)
+    {
+        @if (isAnalyzing)
+        {
+            <p><em>Loading analysis...</em></p>
+        }
+        else if (!string.IsNullOrWhiteSpace(analysisError))
+        {
+            <div class="alert alert-danger">@analysisError</div>
+        }
+        else if (currentPosition is not null)
+        {
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Mortgage Balance</h5>
+                    @if (mortgageChartData.HasData)
+                    {
+                        <ApexChart TItem="MortgageBalanceChartPointModel"
+                                   Height="380"
+                                   Options="mortgageChartOptions">
+                            <ApexPointSeries TItem="MortgageBalanceChartPointModel"
+                                             Items="mortgageChartData.HistoricalPoints"
+                                             Name="Historical balance"
+                                             SeriesType="SeriesType.Line"
+                                             XValue="point => point.Timestamp"
+                                             YValue="point => point.Balance"
+                                             Stroke="historicalSeriesStroke" />
+                            <ApexPointSeries TItem="MortgageBalanceChartPointModel"
+                                             Items="mortgageChartData.ForecastPoints"
+                                             Name="Forecast balance"
+                                             SeriesType="SeriesType.Line"
+                                             XValue="point => point.Timestamp"
+                                             YValue="point => point.Balance"
+                                             Stroke="forecastSeriesStroke" />
+                            @if (mortgageChartData.HasOffsetAdjustedBalance)
+                            {
+                                <ApexPointSeries TItem="MortgageBalanceChartPointModel"
+                                                 Items="mortgageChartData.OffsetAdjustedHistoricalPoints"
+                                                 Name="Historical balance (offsets)"
+                                                 SeriesType="SeriesType.Line"
+                                                 XValue="point => point.Timestamp"
+                                                 YValue="point => point.Balance"
+                                                 Stroke="offsetAdjustedHistoricalSeriesStroke" />
+                                <ApexPointSeries TItem="MortgageBalanceChartPointModel"
+                                                 Items="mortgageChartData.OffsetAdjustedForecastPoints"
+                                                 Name="Forecast balance (offsets)"
+                                                 SeriesType="SeriesType.Line"
+                                                 XValue="point => point.Timestamp"
+                                                 YValue="point => point.Balance"
+                                                 Stroke="offsetAdjustedForecastSeriesStroke" />
+                            }
+                        </ApexChart>
+                        <small class="text-muted d-block mt-2">
+                            Historical balances are observed from imported transactions. Forecast balances are projected from the latest observed mortgage balance until payoff.
+                            @if (mortgageChartData.HasOffsetAdjustedBalance)
+                            {
+                                <span> The offset-adjusted line reflects the interest-bearing balance after subtracting the currently selected offset balance.</span>
+                            }
+                        </small>
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-0">No mortgage balance data is available yet.</p>
+                    }
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Current Position</h5>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>Mortgage owing:</strong>
+                            <p class="display-6">@FormatCurrency(currentPosition.CurrentBalance)</p>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Offset balance:</strong>
+                            <p class="display-6">@FormatCurrency(currentPosition.TotalOffsetBalance)</p>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Interest calculated on:</strong>
+                            <p class="display-6">@FormatCurrency(currentPosition.InterestBearingBalance)</p>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>As of:</strong>
+                            <p>@currentPosition.LatestDate.ToString("dd MMM yyyy")</p>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-3">
+                            <strong>Total Repayments:</strong>
+                            <p>@FormatCurrency(currentPosition.TotalRepayments)</p>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Transactions:</strong>
+                            <p>@currentPosition.TransactionCount</p>
+                        </div>
+                    </div>
+                    <div class="alert alert-secondary mt-3 mb-0">
+                        Offset accounts reduce the balance on which interest is calculated. They do not directly reduce the mortgage principal.
+                    </div>
+                    @if (currentPosition.EarliestDate.HasValue)
+                    {
+                        <small class="text-muted d-block mt-2">
+                            Historical period: @currentPosition.EarliestDate.Value.ToString("dd MMM yyyy") to @currentPosition.LatestDate.ToString("dd MMM yyyy")
+                        </small>
+                    }
+                </div>
+            </div>
+
+            <!-- Forecast Assumptions -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Forecast Assumptions</h5>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Annual Interest Rate (%)</label>
+                            <input class="form-control" type="number" step="0.001" min="0" disabled="@isForecastUpdating" @bind="userAnnualInterestRatePercent" @bind:after="OnAssumptionsChangedAsync" />
+                            <small class="text-muted">Derived from observed interest charges when available; editable as a percentage.</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Detected repayment</label>
+                            <div class="border rounded p-2 bg-light">
+                                <div><strong>@(detectedRepaymentAmount.HasValue ? FormatCurrency(detectedRepaymentAmount.Value) : "Not detected yet")</strong></div>
+                                <div>@(detectedRepaymentsPerYear.HasValue ? GetFrequencyLabel(detectedRepaymentsPerYear.Value) : "Unknown frequency")</div>
+                                <div class="text-muted small">@(detectionConfidence > 0 ? $"Detected from imported transactions with {detectionConfidence * 100:F0}% confidence" : "Forecasts use imported transaction history as the default repayment source")</div>
+                                @if (detectedRepaymentCount.HasValue)
+                                {
+                                    <div class="text-muted small">Observed across @detectedRepaymentCount repayments</div>
+                                }
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Optional what-if override</label>
+                            <div class="border rounded p-3">
+                                <div class="input-group mb-2">
+                                    <span class="input-group-text">$</span>
+                                    <input class="form-control" type="number" step="0.01" min="0" disabled="@isForecastUpdating" @bind="userRepaymentAmount" @bind:after="OnAssumptionsChangedAsync" />
+                                </div>
+                                <select class="form-select mb-2" disabled="@isForecastUpdating" @bind="userRepaymentsPerYear" @bind:after="OnAssumptionsChangedAsync">
+                                    <option value="0">Use detected frequency</option>
+                                    <option value="1">Annually</option>
+                                    <option value="2">Bi-annually</option>
+                                    <option value="4">Quarterly</option>
+                                    <option value="12">Monthly</option>
+                                    <option value="24">Bi-weekly</option>
+                                    <option value="26">Bi-weekly (26x)</option>
+                                    <option value="52">Weekly</option>
+                                </select>
+                                <small class="text-muted d-block">Leave these unset to use the repayment pattern detected from imported transactions.</small>
+                                @if (HasRepaymentOverrides)
+                                {
+                                    <button type="button" class="btn btn-outline-secondary btn-sm mt-2" @onclick="ClearRepaymentOverridesAsync">Clear overrides</button>
+                                }
+                            </div>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Offset Accounts</label>
+                            <div class="border rounded p-3 bg-light">
+                                @if (!eligibleOffsetAccounts.Any())
+                                {
+                                    <p class="mb-0 text-muted">No eligible active imported accounts are available to link as offsets.</p>
+                                }
+                                else
+                                {
+                                    <div class="row g-2">
+                                        @foreach (var account in eligibleOffsetAccounts)
+                                        {
+                                            <div class="col-md-4">
+                                                <div class="form-check">
+                                                    <input class="form-check-input"
+                                                           type="checkbox"
+                                                           id="offset-@account.Id"
+                                                           checked="@selectedOffsetAccountIds.Contains(account.Id)"
+                                                           @onchange="@(args => OnOffsetAccountToggledAsync(account.Id, args.Value))" />
+                                                    <label class="form-check-label" for="offset-@account.Id">@account.Name</label>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                            <small class="text-muted">Select existing linked accounts that reduce the balance on which mortgage interest is calculated.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Forecast Results Loading/Error -->
+            @if (isForecastUpdating)
+            {
+                <div class="alert alert-info">
+                    <div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>
+                    <em>Calculating forecast with updated assumptions...</em>
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(forecastError))
+            {
+                <div class="alert alert-warning">
+                    <strong>Forecast Update Failed:</strong> @forecastError
+                </div>
+            }
+
+            <!-- Forecast Information -->
+            @if (forecastData is not null)
+            {
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h5 class="card-title">Forecast Summary</h5>
+                        <div class="row">
+                            <div class="col-md-3">
+                                <strong>Status:</strong>
+                                <p>@GetForecastStatusLabel(forecastData.Forecast?.Status)</p>
+                                <small class="text-muted">Projection</small>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Payoff Date:</strong>
+                                <p>@(forecastData.Forecast?.ProjectedPayoffDate?.ToString("dd MMM yyyy") ?? "Not projected")</p>
+                                <small class="text-muted">Outstanding principal = $0</small>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Interest-Free Date:</strong>
+                                <p>@(forecastData.Forecast?.ProjectedInterestFreeDate?.ToString("dd MMM yyyy") ?? "Not reached")</p>
+                                <small class="text-muted">Interest-bearing principal = $0</small>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Future Interest:</strong>
+                                <p>@FormatCurrency(forecastData.Forecast?.TotalFutureInterest ?? 0m)</p>
+                                <small class="text-muted">Projection</small>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-3">
+                                <strong>Outstanding Principal:</strong>
+                                <p>@FormatCurrency(forecastData.Forecast?.CurrentOutstandingPrincipal ?? 0m)</p>
+                                <small class="text-muted">From history</small>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Offset Balance:</strong>
+                                <p>@FormatCurrency(forecastData.Forecast?.CurrentOffsetBalance ?? 0m)</p>
+                                <small class="text-muted">Selected accounts</small>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Effective Principal:</strong>
+                                <p>@FormatCurrency(forecastData.Forecast?.EffectivePrincipalAfterOffset ?? 0m)</p>
+                                <small class="text-muted">Interest-bearing amount</small>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Remaining Repayments:</strong>
+                                <p>@(forecastData.Forecast?.RemainingRepaymentCount ?? 0)</p>
+                                <small class="text-muted">Projected payment count</small>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-3">
+                            </div>
+                            <div class="col-md-3">
+                            </div>
+                            <div class="col-md-3">
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Future Repayments:</strong>
+                                <p>@FormatCurrency(forecastData.Forecast?.TotalFutureRepayments ?? 0m)</p>
+                                <small class="text-muted">Sum of forecast payments</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
     }
 }
 
 @code {
-    private List<MortgageModel> mortgages = [];
+    private readonly SeriesStroke historicalSeriesStroke = new() { Width = 3, DashSpace = 0, Color = "#994455"};
+    private readonly SeriesStroke forecastSeriesStroke = new() { Width = 3, DashSpace = 8, Color = "#994455" };
+    private readonly SeriesStroke offsetAdjustedHistoricalSeriesStroke = new() { Width = 2, DashSpace = 0, Color = "#554499" };
+    private readonly SeriesStroke offsetAdjustedForecastSeriesStroke = new() { Width = 2, DashSpace = 8, Color = "#554499" };
+    private List<AccountModel> mortgageAccounts = [];
+    private List<AccountModel> availableAccounts = [];
+    private HashSet<Guid> selectedOffsetAccountIds = [];
+    private AccountModel? selectedAccount;
+    private string selectedAccountId = string.Empty;
     private bool isLoading = true;
-    private bool isCreating;
+    private bool isAnalyzing;
+    private bool isForecastUpdating;
     private string? loadError;
-    private string? createError;
+    private string? analysisError;
+    private string? forecastError;
 
-    private string name = string.Empty;
-    private decimal originalPrincipal;
-    private decimal currentPrincipal;
-    private decimal annualInterestRate;
-    private decimal scheduledRepayment;
-    private int repaymentsPerYear = 12;
-    private DateOnly startDate = DateOnly.FromDateTime(DateTime.Today);
+    private MortgageCurrentPositionModel? currentPosition;
+    private MortgageForecastResponseModel? forecastData;
+    private MortgageBalanceChartDataModel mortgageChartData = new([], [], [], []);
+    private ApexChartOptions<MortgageBalanceChartPointModel> mortgageChartOptions = new();
+    private List<MortgageHistoryPointModel> historyPoints = [];
+
+    // User assumptions
+    private decimal userAnnualInterestRatePercent = 6m;
+    private decimal userRepaymentAmount;
+    private int userRepaymentsPerYear;
+
+    // Detected values
+    private decimal? detectedRepaymentAmount;
+    private int? detectedRepaymentsPerYear;
+    private int? detectedRepaymentCount;
+    private decimal detectionConfidence;
+
+    // Request sequencing to prevent stale responses
+    private int currentForecastRequestId;
+    private int lastCompletedForecastRequestId = -1;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadMortgagesAsync();
+        ConfigureMortgageChart();
+        await LoadDataAsync();
     }
 
-    private async Task LoadMortgagesAsync()
+    private async Task LoadDataAsync()
     {
         isLoading = true;
         loadError = null;
 
         try
         {
-            mortgages = (await ApiClient.GetMortgagesAsync()).OrderBy(mortgage => mortgage.Name).ToList();
+            mortgageAccounts = (await ApiClient.GetMortgageAccountsAsync()).ToList();
+            availableAccounts = (await ApiClient.GetAccountsAsync())
+                .OrderBy(account => account.Name)
+                .ToList();
         }
         catch (Exception ex)
         {
-            loadError = $"Unable to load mortgages: {ex.Message}";
+            loadError = $"Unable to load mortgage accounts: {ex.Message}";
         }
         finally
         {
@@ -131,55 +382,328 @@ else
         }
     }
 
-    private async Task CreateMortgageAsync()
+    private async Task OnAccountSelectedAsync()
     {
-        createError = null;
+        currentPosition = null;
+        forecastData = null;
+        mortgageChartData = new MortgageBalanceChartDataModel([], [], [], []);
+        historyPoints.Clear();
+        analysisError = null;
+        detectedRepaymentAmount = null;
+        detectedRepaymentsPerYear = null;
+        detectedRepaymentCount = null;
+        detectionConfidence = 0m;
+        userRepaymentAmount = 0m;
+        userRepaymentsPerYear = 0;
+        selectedOffsetAccountIds.Clear();
 
-        if (string.IsNullOrWhiteSpace(name))
+        if (string.IsNullOrWhiteSpace(selectedAccountId) || !Guid.TryParse(selectedAccountId, out var accountId))
         {
-            createError = "Mortgage name is required.";
+            selectedAccount = null;
             return;
         }
 
-        isCreating = true;
+        selectedAccount = mortgageAccounts.FirstOrDefault(a => a.Id.ToString() == selectedAccountId);
+        if (selectedAccount is null)
+        {
+            return;
+        }
+
+        isAnalyzing = true;
 
         try
         {
-            var request = new CreateMortgageRequestModel(
-                name.Trim(),
-                originalPrincipal,
-                currentPrincipal,
-                annualInterestRate,
-                scheduledRepayment,
-                repaymentsPerYear,
-                startDate,
-                null,
-                [new InterestRatePeriodModel(startDate, null, annualInterestRate)]);
+            // Load history and summary
+            historyPoints = (await ApiClient.GetMortgageHistoryAsync(accountId)).ToList();
+            currentPosition = await ApiClient.GetMortgageSummaryAsync(accountId);
 
-            var created = await ApiClient.CreateMortgageAsync(request);
-            mortgages.Add(created);
-            mortgages = mortgages.OrderBy(mortgage => mortgage.Name).ToList();
+            if (currentPosition is not null)
+            {
+                selectedOffsetAccountIds = currentPosition.OffsetAccountIds.ToHashSet();
+                userAnnualInterestRatePercent = currentPosition.EstimatedAnnualInterestRate.HasValue
+                    ? decimal.Round(currentPosition.EstimatedAnnualInterestRate.Value * 100m, 3, MidpointRounding.AwayFromZero)
+                    : 6m;
+            }
 
-            name = string.Empty;
-            originalPrincipal = 0m;
-            currentPrincipal = 0m;
-            annualInterestRate = 0m;
-            scheduledRepayment = 0m;
-            repaymentsPerYear = 12;
-            startDate = DateOnly.FromDateTime(DateTime.Today);
+            // Generate forecast with initial assumptions - this will also detect repayments
+            await GenerateForecastAsync();
         }
         catch (Exception ex)
         {
-            createError = $"Unable to create mortgage: {ex.Message}";
+            analysisError = $"Unable to load mortgage analysis: {ex.Message}";
         }
         finally
         {
-            isCreating = false;
+            isAnalyzing = false;
         }
+    }
+
+    private async Task GenerateForecastAsync()
+    {
+        if (!Guid.TryParse(selectedAccountId, out var accountId))
+        {
+            return;
+        }
+
+        // Validate inputs locally before making API call
+        if (!ValidateAssumptions(out var validationError))
+        {
+            forecastError = validationError;
+            return;
+        }
+
+        // Increment request ID to detect stale responses
+        var requestId = ++currentForecastRequestId;
+        isForecastUpdating = true;
+        forecastError = null;
+
+        try
+        {
+            var request = new MortgageForecastRequestModel(
+                decimal.Round(userAnnualInterestRatePercent / 100m, 6, MidpointRounding.AwayFromZero),
+                userRepaymentAmount > 0m ? userRepaymentAmount : detectedRepaymentAmount ?? 0m,
+                userRepaymentsPerYear > 0 ? userRepaymentsPerYear : detectedRepaymentsPerYear ?? 0,
+                selectedOffsetAccountIds.ToList());
+
+            var result = await ApiClient.GenerateMortgageForecastAsync(accountId, request);
+
+            // Only update UI if this is still the latest request
+            if (requestId == currentForecastRequestId && result is not null)
+            {
+                forecastData = result;
+                mortgageChartData = MortgageChartDataBuilder.Build(result);
+
+                // Update detected values from the forecast response
+                if (result.DetectedRepayment is not null)
+                {
+                    detectedRepaymentAmount = result.DetectedRepayment.EstimatedAmount;
+                    detectedRepaymentsPerYear = result.DetectedRepayment.EstimatedFrequency;
+                    detectedRepaymentCount = result.DetectedRepayment.NumberOfObservations;
+                    detectionConfidence = result.DetectedRepayment.Confidence;
+                }
+                else
+                {
+                    detectedRepaymentAmount = null;
+                    detectedRepaymentsPerYear = null;
+                    detectedRepaymentCount = null;
+                    detectionConfidence = 0m;
+                }
+
+                lastCompletedForecastRequestId = requestId;
+            }
+        }
+        catch (Exception ex)
+        {
+            // Only show error if this is still the latest request
+            if (requestId == currentForecastRequestId)
+            {
+                forecastError = $"Unable to generate forecast: {ex.Message}";
+            }
+        }
+        finally
+        {
+            // Only clear loading state if this is still the latest request
+            if (requestId == currentForecastRequestId)
+            {
+                isForecastUpdating = false;
+            }
+        }
+    }
+
+    private bool ValidateAssumptions(out string? error)
+    {
+        error = null;
+
+        // Validate annual interest rate
+        if (userAnnualInterestRatePercent < 0m)
+        {
+            error = "Annual interest rate cannot be negative.";
+            return false;
+        }
+
+        if (userAnnualInterestRatePercent > 100m)
+        {
+            error = "Annual interest rate cannot exceed 100%.";
+            return false;
+        }
+
+        // Validate repayment amount if provided
+        if (userRepaymentAmount < 0m)
+        {
+            error = "Repayment amount cannot be negative.";
+            return false;
+        }
+
+        // Validate repayment frequency if provided
+        if (userRepaymentsPerYear > 0)
+        {
+            var validFrequencies = new[] { 1, 2, 4, 12, 24, 26, 52 };
+            if (!validFrequencies.Contains(userRepaymentsPerYear))
+            {
+                error = $"Invalid repayment frequency: {userRepaymentsPerYear}. Use one of: 1, 2, 4, 12, 24, 26, or 52.";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private bool HasRepaymentOverrides => userRepaymentAmount > 0m || userRepaymentsPerYear > 0;
+
+    private async Task OnAssumptionsChangedAsync()
+    {
+        forecastError = null; // Clear previous forecast error when user makes changes
+        await GenerateForecastAsync();
+    }
+
+    private async Task ClearRepaymentOverridesAsync()
+    {
+        userRepaymentAmount = 0m;
+        userRepaymentsPerYear = 0;
+        await GenerateForecastAsync();
+    }
+
+    private async Task OnOffsetAccountToggledAsync(Guid accountId, object? value)
+    {
+        if (!Guid.TryParse(selectedAccountId, out var mortgageAccountId) || value is not bool isSelected)
+        {
+            return;
+        }
+
+        if (isSelected)
+        {
+            selectedOffsetAccountIds.Add(accountId);
+        }
+        else
+        {
+            selectedOffsetAccountIds.Remove(accountId);
+        }
+
+        try
+        {
+            var updatedPosition = await ApiClient.UpdateMortgageOffsetAccountsAsync(
+                mortgageAccountId,
+                new UpdateMortgageOffsetAccountsRequestModel(selectedOffsetAccountIds.ToList()));
+
+            if (updatedPosition is not null)
+            {
+                currentPosition = updatedPosition;
+                selectedOffsetAccountIds = updatedPosition.OffsetAccountIds.ToHashSet();
+
+                if (updatedPosition.EstimatedAnnualInterestRate.HasValue)
+                {
+                    userAnnualInterestRatePercent = decimal.Round(updatedPosition.EstimatedAnnualInterestRate.Value * 100m, 3, MidpointRounding.AwayFromZero);
+                }
+            }
+
+            await GenerateForecastAsync();
+        }
+        catch (Exception ex)
+        {
+            analysisError = $"Unable to save offset accounts: {ex.Message}";
+        }
+    }
+
+    private IEnumerable<AccountModel> eligibleOffsetAccounts => availableAccounts
+        .Where(account => account.IsActive)
+        .Where(account => account.Id.ToString() != selectedAccountId)
+        .Where(account => account.Type is not "Mortgage" and not "CreditCard")
+        .OrderBy(account => account.Name);
+
+    private void ConfigureMortgageChart()
+    {
+        mortgageChartOptions = new ApexChartOptions<MortgageBalanceChartPointModel>
+        {
+            Chart = new Chart
+            {
+                Toolbar = new Toolbar { Show = false },
+                Animations = new Animations { Enabled = false }
+            },
+            Stroke = new Stroke
+            {
+                Curve = Curve.Straight,
+                Width = [3, 3],
+                DashArray = [0, 8]
+            },
+            DataLabels = new DataLabels { Enabled = false },
+            Markers = new Markers { Size = 0 },
+            Tooltip = new Tooltip
+            {
+                Shared = true,
+                Intersect = false,
+                X = new TooltipX { Show = true }
+            },
+            Xaxis = new XAxis
+            {
+                Type = XAxisType.Datetime,
+                Title = new AxisTitle { Text = "Date" }
+            },
+            Yaxis = [new YAxis
+            {
+                Min = 0,
+                Title = new AxisTitle { Text = "Outstanding mortgage balance" },
+                Labels = new YAxisLabels
+                {
+                    Formatter = "function(value) { return '$' + value.toLocaleString(); }"
+                }
+            }],
+            Annotations = new Annotations
+            {
+                Yaxis =
+                [
+                    new AnnotationsYAxis
+                    {
+                        Y = 0,
+                        BorderColor = "#6c757d",
+                        StrokeDashArray = 4,
+                        Label = new Label
+                        {
+                            Text = "Zero balance",
+                            Style = new Style
+                            {
+                                Background = "#6c757d",
+                                Color = "#ffffff"
+                            }
+                        }
+                    }
+                ]
+            },
+            Legend = new Legend
+            {
+                Position = LegendPosition.Top
+            }
+        };
     }
 
     private static string FormatCurrency(decimal amount)
     {
-        return amount.ToString("C");
+        return amount.ToString("C0");
+    }
+
+    private static string GetFrequencyLabel(int repaymentsPerYear)
+    {
+        return repaymentsPerYear switch
+        {
+            1 => "Annually",
+            2 => "Bi-annually",
+            4 => "Quarterly",
+            12 => "Monthly",
+            24 => "Bi-weekly",
+            26 => "Bi-weekly (26x)",
+            52 => "Weekly",
+            _ => $"{repaymentsPerYear}x per year"
+        };
+    }
+
+    private static string GetForecastStatusLabel(string? status)
+    {
+        return status switch
+        {
+            "PaidOff" => "Will be paid off",
+            "NonAmortising" => "Repayment does not reduce principal",
+            "SafetyLimitReached" => "Projection limit reached",
+            "Unavailable" => "Waiting for repayment pattern or override",
+            _ => "Unknown"
+        };
     }
 }

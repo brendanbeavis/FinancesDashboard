@@ -42,7 +42,7 @@ else
                     <td>@(account.IsActive ? "Yes" : "No")</td>
                     <td>
                         <button class="btn btn-sm btn-primary" @onclick="() => OnEditClick(account)">Edit</button>
-                        <button class="btn btn-sm btn-secondary ms-2" @onclick="() => OnViewClick(account)">View</button>
+                        <button class="btn btn-sm btn-success ms-2" @onclick="() => OnViewClick(account)">View Transactions</button>
                         <button class="btn btn-sm btn-warning ms-2" @onclick="() => OnImportClick(account)">Import Data</button>
                     </td>
                 </tr>

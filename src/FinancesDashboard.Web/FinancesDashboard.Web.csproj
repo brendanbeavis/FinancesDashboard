@@ -10,4 +10,8 @@
     <ProjectReference Include="..\FinancesDashboard.ServiceDefaults\FinancesDashboard.ServiceDefaults.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Blazor-ApexCharts" Version="7.0.0" />
+  </ItemGroup>
+
 </Project>

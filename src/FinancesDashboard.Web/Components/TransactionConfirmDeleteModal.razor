@@ -1,0 +1,97 @@
+@using FinancesDashboard.Web.Models
+
+<div class="modal @(IsVisible ? "show" : "")" style="display: @(IsVisible ? "block" : "none"); background-color: @(IsVisible ? "rgba(0,0,0,0.5)" : "transparent");" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete Transaction</h5>
+                <button type="button" class="btn-close" aria-label="Close" @onclick="HandleCancel" disabled="@IsDeleting"></button>
+            </div>
+            <div class="modal-body">
+                @if (Transaction is not null)
+                {
+                    <p>Are you sure you want to delete this transaction? This action cannot be undone.</p>
+                    <div class="alert alert-warning">
+                        <strong>Transaction Details:</strong>
+                        <dl class="row">
+                            <dt class="col-sm-4">Date:</dt>
+                            <dd class="col-sm-8">@Transaction.Date.ToLongDateString()</dd>
+
+                            <dt class="col-sm-4">Description:</dt>
+                            <dd class="col-sm-8">@Transaction.Description</dd>
+
+                            <dt class="col-sm-4">Amount:</dt>
+                            <dd class="col-sm-8">
+                                <span class="@(Transaction.Amount >= 0 ? "text-success" : "text-danger")">
+                                    @Transaction.Amount.ToString("C")
+                                </span>
+                            </dd>
+
+                            <dt class="col-sm-4">Bank Balance:</dt>
+                            <dd class="col-sm-8">@Transaction.BankBalance.ToString("C")</dd>
+                        </dl>
+                    </div>
+                }
+                @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+                {
+                    <div class="alert alert-danger" role="alert">@ErrorMessage</div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="HandleCancel" disabled="@IsDeleting">Cancel</button>
+                <button type="button" class="btn btn-danger" @onclick="HandleDelete" disabled="@IsDeleting">
+                    @if (IsDeleting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        <span>Deleting...</span>
+                    }
+                    else
+                    {
+                        <span>Delete Transaction</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public TransactionModel? Transaction { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback OnDeleteAsync { get; set; }
+
+    private bool IsDeleting = false;
+    private string? ErrorMessage { get; set; }
+
+    private async Task HandleDelete()
+    {
+        IsDeleting = true;
+        ErrorMessage = null;
+
+        try
+        {
+            await OnDeleteAsync.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error deleting transaction: {ex.Message}";
+            IsDeleting = false;
+        }
+    }
+
+    private async Task HandleCancel()
+    {
+        if (!IsDeleting)
+        {
+            await OnClose.InvokeAsync(false);
+        }
+    }
+}

@@ -9,29 +9,37 @@ namespace FinancesDashboard.Application.Services;
 public sealed class DashboardApplicationService(
     FinancesDashboardDbContext dbContext,
     IForecastStrategy forecastStrategy,
-    ForecastOptions forecastOptions)
+    ForecastOptions forecastOptions,
+    CreditCardPositionService creditCardPositionService)
 {
     public async Task<DashboardSummary> GetSummaryAsync(CancellationToken cancellationToken)
     {
         var latestAccountBalances = await GetLatestAccountBalancesAsync(cancellationToken);
 
+        // Credit card position is calculated from the sum of all transaction amounts.
+        // Get the total accrued balance across all credit card accounts
+        var creditCardAccruedBalance = await creditCardPositionService.GetTotalCreditCardPositionAsync(cancellationToken);
+        var currentCreditCardPosition = Math.Abs(creditCardAccruedBalance);
+
+        // Build net position: include all non-credit-card accounts via GetNetContribution,
+        // then apply the credit card accrued balance (which will be negative for debt)
         var accountNetPosition = latestAccountBalances
-            .Sum(item => GetNetContribution(item.Type, item.Balance));
+            .Where(item => item.Type != AccountType.CreditCard)
+            .Sum(item => GetNetContribution(item.Type, item.Balance))
+            + GetNetContribution(AccountType.CreditCard, creditCardAccruedBalance);
 
         var currentCashPosition = latestAccountBalances
             .Where(item => item.Type is AccountType.Transaction or AccountType.Savings)
             .Sum(item => item.Balance);
 
-        var currentCreditCardPosition = latestAccountBalances
-            .Where(item => item.Type == AccountType.CreditCard)
-            .Sum(item => item.Balance);
-
-        var currentMortgagePosition = -await dbContext.Mortgages
-            .AsNoTracking()
-            .SumAsync(mortgage => (decimal?)mortgage.CurrentPrincipal, cancellationToken) ?? 0m;
+        // Mortgage position is included in the latestAccountBalances from GetLatestAccountBalancesAsync
+        // which already includes mortgage accounts with their latest BankBalance
+        var currentMortgagePosition = latestAccountBalances
+            .Where(item => item.Type == AccountType.Mortgage)
+            .Sum(item => -Math.Abs(item.Balance));
 
         return new DashboardSummary(
-            accountNetPosition + currentMortgagePosition,
+            accountNetPosition,
             currentCashPosition,
             currentCreditCardPosition,
             currentMortgagePosition);
@@ -211,6 +219,132 @@ public sealed class DashboardApplicationService(
         return projectedDeltas
             .Select(point => point with { ProjectedPosition = decimal.Round(startPoint.Balance + point.ProjectedPosition, 2, MidpointRounding.AwayFromZero) })
             .ToList();
+    }
+
+    public async Task<IReadOnlyList<AccountDashboardSummary>> GetAccountSummariesAsync(CancellationToken cancellationToken)
+    {
+        // Get all active accounts
+        var accounts = await dbContext.Accounts
+            .AsNoTracking()
+            .Where(a => a.IsActive)
+            .OrderBy(a => a.Name)
+            .ToListAsync(cancellationToken);
+
+        if (accounts.Count == 0)
+        {
+            return [];
+        }
+
+        var summaries = new List<AccountDashboardSummary>(accounts.Count);
+
+        // Determine previous month date range
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var firstDayOfCurrentMonth = new DateOnly(today.Year, today.Month, 1);
+        var lastDayOfPreviousMonth = firstDayOfCurrentMonth.AddDays(-1);
+        var firstDayOfPreviousMonth = new DateOnly(lastDayOfPreviousMonth.Year, lastDayOfPreviousMonth.Month, 1);
+
+        // Get all transactions grouped by account to minimize database queries
+        var transactionsByAccount = await dbContext.Transactions
+            .AsNoTracking()
+            .GroupBy(t => t.AccountId)
+            .Select(g => new
+            {
+                AccountId = g.Key,
+                AllTransactions = g.ToList(),
+                LatestTransaction = g.OrderByDescending(t => t.Date).ThenByDescending(t => t.ImportedUtc).First(),
+                PreviousMonthTransactions = g.Where(t => t.Date >= firstDayOfPreviousMonth && t.Date <= lastDayOfPreviousMonth).ToList()
+            })
+            .ToDictionaryAsync(x => x.AccountId, cancellationToken);
+
+        foreach (var account in accounts)
+        {
+            var hasTransactions = transactionsByAccount.TryGetValue(account.Id, out var transactionData);
+
+            decimal currentPosition = 0m;
+            bool isLiability = false;
+            DateOnly? lastTransactionDate = null;
+            int transactionCount = 0;
+
+            if (hasTransactions && transactionData != null)
+            {
+                lastTransactionDate = transactionData.LatestTransaction.Date;
+                transactionCount = transactionData.AllTransactions.Count;
+
+                // Calculate current position based on account type
+                currentPosition = account.Type switch
+                {
+                    AccountType.CreditCard =>
+                        // Credit card: sum all amounts and take absolute value for "owing"
+                        Math.Abs(transactionData.AllTransactions.Sum(t => t.Amount)),
+
+                    AccountType.Mortgage =>
+                        // Mortgage: show as positive outstanding principal
+                        Math.Abs(transactionData.LatestTransaction.BankBalance),
+
+                    _ =>
+                        // Assets and other: use latest BankBalance as-is
+                        transactionData.LatestTransaction.BankBalance
+                };
+
+                // Determine if this is a liability (displayed as owing/owed)
+                isLiability = account.Type is AccountType.CreditCard or AccountType.Mortgage;
+            }
+
+            // Calculate previous month activity
+            decimal previousMonthIncome = 0m;
+            decimal previousMonthExpenses = 0m;
+            int previousMonthTransactionCount = 0;
+
+            if (hasTransactions && transactionData?.PreviousMonthTransactions.Count > 0)
+            {
+                previousMonthIncome = transactionData.PreviousMonthTransactions
+                    .Where(t => t.Amount > 0m)
+                    .Sum(t => t.Amount);
+
+                previousMonthExpenses = transactionData.PreviousMonthTransactions
+                    .Where(t => t.Amount < 0m)
+                    .Sum(t => -t.Amount);
+
+                previousMonthTransactionCount = transactionData.PreviousMonthTransactions.Count;
+            }
+
+            decimal previousMonthNet = previousMonthIncome - previousMonthExpenses;
+
+            var summary = new AccountDashboardSummary(
+                account.Id,
+                account.Name,
+                account.Type.ToString(),
+                currentPosition,
+                isLiability,
+                previousMonthIncome,
+                previousMonthExpenses,
+                previousMonthNet,
+                lastTransactionDate,
+                transactionCount,
+                previousMonthTransactionCount,
+                account.IsActive);
+
+            summaries.Add(summary);
+        }
+
+        return summaries;
+    }
+
+    private async Task<decimal> GetCreditCardAccruedBalanceAsync(CancellationToken cancellationToken)
+    {
+        var creditCardBalance = await dbContext.Transactions
+            .AsNoTracking()
+            .Where(transaction => 
+                dbContext.Accounts
+                    .AsNoTracking()
+                    .Where(account => account.Type == AccountType.CreditCard)
+                    .Select(account => account.Id)
+                    .Contains(transaction.AccountId))
+            .GroupBy(transaction => transaction.AccountId)
+            .Select(group => group.Sum(item => item.Amount))
+            .SumAsync(cancellationToken);
+
+        return creditCardBalance;
     }
 
     private async Task<List<AccountBalance>> GetLatestAccountBalancesAsync(CancellationToken cancellationToken)
