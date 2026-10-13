@@ -383,10 +383,10 @@ else
 }
 
 @code {
-    private readonly SeriesStroke historicalSeriesStroke = new() { Width = 3, DashSpace = 0, Color = "#994455" };
-    private readonly SeriesStroke forecastSeriesStroke = new() { Width = 3, DashSpace = 8, Color = "#994455" };
-    private readonly SeriesStroke offsetAdjustedHistoricalSeriesStroke = new() { Width = 2, DashSpace = 0, Color = "#554499" };
-    private readonly SeriesStroke offsetAdjustedForecastSeriesStroke = new() { Width = 2, DashSpace = 8, Color = "#554499" };
+    private readonly SeriesStroke historicalSeriesStroke = new() { Width = 3, DashSpace = 0, Color = "#111214" };
+    private readonly SeriesStroke forecastSeriesStroke = new() { Width = 3, DashSpace = 8, Color = "#30c4dc" };
+    private readonly SeriesStroke offsetAdjustedHistoricalSeriesStroke = new() { Width = 2, DashSpace = 0, Color = "#55585d" };
+    private readonly SeriesStroke offsetAdjustedForecastSeriesStroke = new() { Width = 2, DashSpace = 8, Color = "#8c9300" };
     private List<AccountModel> mortgageAccounts = [];
     private List<AccountModel> availableAccounts = [];
     private HashSet<Guid> selectedOffsetAccountIds = [];
@@ -686,7 +686,7 @@ else
                 Animations = new Animations { Enabled = false },
                 Zoom = new Zoom { Enabled = false }
             },
-            Colors = ["#994455", "#994455", "#554499", "#554499"],
+            Colors = ["#111214", "#30c4dc", "#55585d", "#0b7285"],
             Stroke = new Stroke
             {
                 Curve = Curve.Straight,
@@ -697,8 +697,8 @@ else
             Markers = new Markers { Size = 0 },
             Grid = new Grid
             {
-                BorderColor = "rgba(15, 23, 42, 0.08)",
-                StrokeDashArray = 4
+                BorderColor = "rgba(17, 18, 20, 0.08)",
+                StrokeDashArray = 2
             },
             Tooltip = new Tooltip
             {
@@ -721,8 +721,11 @@ else
                         Year = "yyyy",
                         Month = "MMM yyyy",
                         Day = "dd MMM"
-                    }
-                }
+                    },
+                    Style = new AxisLabelStyle { Colors = "#777b80" }
+                },
+                AxisBorder = new AxisBorder { Color = "#34363a" },
+                AxisTicks = new AxisTicks { Color = "#34363a" }
             },
             Yaxis = [new YAxis
             {
@@ -730,7 +733,8 @@ else
                 Title = new AxisTitle { Text = "Outstanding balance" },
                 Labels = new YAxisLabels
                 {
-                    Formatter = "function(value) { return '$' + value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }"
+                    Formatter = "function(value) { return '$' + value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }",
+                    Style = new AxisLabelStyle { Colors = "#777b80" }
                 }
             }],
             Annotations = new Annotations
@@ -740,14 +744,14 @@ else
                     new AnnotationsYAxis
                     {
                         Y = 0,
-                        BorderColor = "#6c757d",
+                        BorderColor = "#111214",
                         StrokeDashArray = 4,
                         Label = new Label
                         {
                             Text = "Zero balance",
                             Style = new Style
                             {
-                                Background = "#6c757d",
+                                Background = "#111214",
                                 Color = "#ffffff"
                             }
                         }

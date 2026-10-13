@@ -16,7 +16,7 @@
 }
 else
 {
-    <div class="row g-3 mb-4 fd-dashboard-lead">
+    <div class="row g-3 mb-3 fd-dashboard-lead">
         @if (isLoading)
         {
             <div class="col-12 col-xxl-7">
@@ -91,7 +91,7 @@ else
     }
     else
     {
-        <div class="row g-3 mb-4">
+        <div class="row g-3 mb-3 fd-dashboard-analysis-row">
             <div class="col-12 col-xxl-8">
                 <div class="fd-section-surface fd-chart-surface h-100 fd-section-refresh @(isVisualsLoading ? "fd-section-refresh--busy" : "fd-fade-in")">
                     <div class="fd-section-title">
@@ -99,7 +99,7 @@ else
                             <h2>Net position history</h2>
                             <p>Observed net position only, aggregated from the latest known account balances on each reporting date.</p>
                         </div>
-                        <div class="d-flex flex-column align-items-xxl-end gap-2">
+                        <div class="d-flex flex-column align-items-xxl-end gap-1">
                             <div class="fd-status-chip fd-status-chip--muted">Observed data only</div>
                             @if (!isVisualsLoading && latestObservedHistoryDate.HasValue)
                             {
@@ -139,7 +139,7 @@ else
             </div>
 
             <div class="col-12 col-xxl-4">
-                <div class="fd-section-surface fd-chart-surface h-100 fd-section-refresh @(isVisualsLoading ? "fd-section-refresh--busy" : "fd-fade-in")">
+                <div class="fd-section-surface fd-chart-surface h-100 fd-section-refresh fd-dashboard-chart-right @(isVisualsLoading ? "fd-section-refresh--busy" : "fd-fade-in")">
                     <div class="fd-section-title">
                         <div>
                             <h2>Previous month cash flow</h2>
@@ -183,7 +183,7 @@ else
             </div>
         </div>
 
-        <div class="fd-section-surface fd-chart-surface mb-4 fd-section-refresh @(isVisualsLoading ? "fd-section-refresh--busy" : "fd-fade-in")">
+        <div class="fd-section-surface fd-chart-surface mb-3 fd-section-refresh fd-dashboard-table-panel @(isVisualsLoading ? "fd-section-refresh--busy" : "fd-fade-in")">
             <div class="fd-section-title">
                 <div>
                     <h2>Account balance trends</h2>
@@ -266,7 +266,7 @@ else
         }
         else
         {
-            <div class="fd-section-surface mb-4 fd-fade-in">
+            <div class="fd-section-surface mb-3 fd-fade-in">
                 <div class="fd-section-title">
                     <div>
                         <h2>Account overview</h2>
@@ -499,8 +499,8 @@ else
     private Dictionary<Guid, IReadOnlyList<BalancePointModel>> accountBalanceHistories = new();
     private DateOnly? latestObservedHistoryDate;
 
-    private readonly SeriesStroke netPositionSeriesStroke = new() { Width = 3, DashSpace = 0, Color = "#1d4ed8" };
-    private readonly SeriesStroke accountTrendSeriesStroke = new() { Width = 2, DashSpace = 0 };
+    private readonly SeriesStroke netPositionSeriesStroke = new() { Width = 3, DashSpace = 0, Color = "#111214" };
+    private readonly SeriesStroke accountTrendSeriesStroke = new() { Width = 2, DashSpace = 0, Color = "#111214" };
     private ApexChartOptions<DashboardNetPositionChartPointModel> netPositionChartOptions = new();
     private ApexChartOptions<DashboardActivityChartPointModel> previousMonthActivityChartOptions = new();
     private ApexChartOptions<DashboardAccountTrendChartPointModel> accountTrendChartOptions = new();
@@ -691,6 +691,8 @@ else
             Chart = new Chart { Toolbar = new Toolbar { Show = false } },
             DataLabels = new DataLabels { Enabled = false },
             Markers = new Markers { Size = 0 },
+            Stroke = new Stroke { Curve = Curve.Straight, Width = 3 },
+            Colors = ["#111214"],
             Legend = new Legend { Show = false },
             Tooltip = new Tooltip
             {
@@ -698,17 +700,29 @@ else
                 Intersect = false,
                 X = new TooltipX { Show = true }
             },
+            Grid = new Grid
+            {
+                BorderColor = "rgba(17, 18, 20, 0.08)",
+                StrokeDashArray = 0
+            },
             Xaxis = new XAxis
             {
                 Type = XAxisType.Datetime,
-                Title = new AxisTitle { Text = "Observed date" }
+                Title = new AxisTitle { Text = "Observed date" },
+                Labels = new XAxisLabels
+                {
+                    Style = new AxisLabelStyle { Colors = "#777b80" }
+                },
+                AxisBorder = new AxisBorder { Color = "#34363a" },
+                AxisTicks = new AxisTicks { Color = "#34363a" }
             },
             Yaxis = [new YAxis
             {
                 Title = new AxisTitle { Text = "Net position" },
                 Labels = new YAxisLabels
                 {
-                    Formatter = "function(value) { return '$' + value.toLocaleString(); }"
+                    Formatter = "function(value) { return '$' + value.toLocaleString(); }",
+                    Style = new AxisLabelStyle { Colors = "#777b80" }
                 }
             }]
         };
@@ -717,6 +731,8 @@ else
         {
             Chart = new Chart { Toolbar = new Toolbar { Show = false } },
             DataLabels = new DataLabels { Enabled = false },
+            PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = false, ColumnWidth = "42%" } },
+            Colors = ["#111214", "#30c4dc"],
             Tooltip = new Tooltip
             {
                 Shared = true,
@@ -726,16 +742,28 @@ else
             {
                 Position = LegendPosition.Top
             },
+            Grid = new Grid
+            {
+                BorderColor = "rgba(17, 18, 20, 0.08)",
+                StrokeDashArray = 0
+            },
             Xaxis = new XAxis
             {
-                Title = new AxisTitle { Text = "Accounts" }
+                Title = new AxisTitle { Text = "Accounts" },
+                Labels = new XAxisLabels
+                {
+                    Style = new AxisLabelStyle { Colors = "#777b80" }
+                },
+                AxisBorder = new AxisBorder { Color = "#34363a" },
+                AxisTicks = new AxisTicks { Color = "#34363a" }
             },
             Yaxis = [new YAxis
             {
                 Title = new AxisTitle { Text = "Amount" },
                 Labels = new YAxisLabels
                 {
-                    Formatter = "function(value) { return '$' + value.toLocaleString(); }"
+                    Formatter = "function(value) { return '$' + value.toLocaleString(); }",
+                    Style = new AxisLabelStyle { Colors = "#777b80" }
                 }
             }]
         };
