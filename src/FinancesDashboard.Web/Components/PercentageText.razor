@@ -1,0 +1,37 @@
+<span class="@BuildClassName()" aria-label="@BuildAriaLabel()">@BuildDisplayValue()</span>
+
+@code {
+    [Parameter]
+    public decimal Value { get; set; }
+
+    [Parameter]
+    public int DecimalPlaces { get; set; } = 2;
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    private string BuildClassName()
+    {
+        var classes = new List<string> { "fd-percentage-text", Value < 0m ? "fd-value--negative" : "fd-value--strong" };
+
+        if (!string.IsNullOrWhiteSpace(Class))
+        {
+            classes.Add(Class);
+        }
+
+        return string.Join(" ", classes);
+    }
+
+    private string BuildDisplayValue()
+    {
+        return $"{Value.ToString($"F{DecimalPlaces}")}%";
+    }
+
+    private string BuildAriaLabel()
+    {
+        return $"{Value.ToString($"F{DecimalPlaces}")} percent";
+    }
+}
+
+@using Microsoft.AspNetCore.Components
+@using System.Collections.Generic

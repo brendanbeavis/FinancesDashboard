@@ -1,37 +1,60 @@
 ﻿<script type="module" src="@Assets["Components/Layout/NavMenu.razor.js"]"></script>
 
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">FinancesDashboard</a>
+<div class="fd-nav-shell">
+    <div class="fd-nav-brand-row">
+        <a class="fd-nav-brand" href="">
+            <span class="fd-nav-brand__mark">FD</span>
+            <span>
+                <span class="fd-nav-brand__eyebrow">FinanceReport</span>
+                <span class="fd-nav-brand__title">Money in full view</span>
+            </span>
+        </a>
     </div>
-</div>
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+    <input type="checkbox" title="Navigation menu" class="navbar-toggler" />
 
-<div id="nav-scrollable" class="nav-scrollable">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-speedometer2" aria-hidden="true"></span> Dashboard
-            </NavLink>
+    <div id="nav-scrollable" class="nav-scrollable">
+        <nav class="nav flex-column fd-nav-list">
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                    <span>
+                        <span class="fd-nav-link__title">Dashboard</span>
+                        <span class="fd-nav-link__meta">Net position, cash, and liabilities</span>
+                    </span>
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="accounts">
+                    <span>
+                        <span class="fd-nav-link__title">Accounts</span>
+                        <span class="fd-nav-link__meta">Sources, balances, and history</span>
+                    </span>
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="mortgages">
+                    <span>
+                        <span class="fd-nav-link__title">Mortgages</span>
+                        <span class="fd-nav-link__meta">Debt, offsets, and payoff timing</span>
+                    </span>
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="settings">
+                    <span>
+                        <span class="fd-nav-link__title">Settings</span>
+                        <span class="fd-nav-link__meta">Preferences and reporting options</span>
+                    </span>
+                </NavLink>
+            </div>
+        </nav>
+
+        <div class="fd-nav-footer px-3">
+            <div class="fd-nav-footer__label">Overview</div>
+            <div class="fd-nav-footer__value">Clearer cash, debt, and mortgage reporting without changing your existing workflows.</div>
         </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="accounts">
-                <span class="bi bi-wallet2" aria-hidden="true"></span> Accounts
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="mortgages">
-                <span class="bi bi-house" aria-hidden="true"></span> Mortgages
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="settings">
-                <span class="bi bi-gear" aria-hidden="true"></span> Settings
-            </NavLink>
-        </div>
-    </nav>
+    </div>
 </div>

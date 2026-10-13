@@ -1,0 +1,76 @@
+<span class="@BuildClassName()" aria-label="@BuildAriaLabel()">@BuildDisplayValue()</span>
+
+@code {
+    [Parameter]
+    public decimal Amount { get; set; }
+
+    [Parameter]
+    public bool TreatAsLiability { get; set; }
+
+    [Parameter]
+    public bool EmphasizeZeroAsPositive { get; set; }
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter]
+    public string PositiveLabel { get; set; } = "inflow";
+
+    [Parameter]
+    public string NegativeLabel { get; set; } = "outflow";
+
+    private string BuildClassName()
+    {
+        var classes = new List<string> { "fd-currency-text", GetSemanticClass() };
+
+        if (!string.IsNullOrWhiteSpace(Class))
+        {
+            classes.Add(Class);
+        }
+
+        return string.Join(" ", classes);
+    }
+
+    private string GetSemanticClass()
+    {
+        if (Amount > 0m || (Amount == 0m && EmphasizeZeroAsPositive))
+        {
+            return "fd-value--positive";
+        }
+
+        if (Amount < 0m || TreatAsLiability)
+        {
+            return "fd-value--negative";
+        }
+
+        return "fd-value--strong";
+    }
+
+    private string BuildDisplayValue()
+    {
+        return Amount.ToString("C");
+    }
+
+    private string BuildAriaLabel()
+    {
+        if (TreatAsLiability)
+        {
+            return $"{BuildDisplayValue()} owing";
+        }
+
+        if (Amount > 0m)
+        {
+            return $"{BuildDisplayValue()} {PositiveLabel}";
+        }
+
+        if (Amount < 0m)
+        {
+            return $"{BuildDisplayValue()} {NegativeLabel}";
+        }
+
+        return BuildDisplayValue();
+    }
+}
+
+@using Microsoft.AspNetCore.Components
+@using System.Collections.Generic

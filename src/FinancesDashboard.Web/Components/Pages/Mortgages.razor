@@ -4,11 +4,17 @@
 
 <PageTitle>Mortgages</PageTitle>
 
-<h1>Mortgages</h1>
+<PageHeader Eyebrow="Debt & Forecasting" Title="Mortgages" Description="Analyse observed mortgage balances, offsets, and payoff scenarios while keeping historical data and projections clearly separated." />
 
 @if (isLoading)
 {
-    <p><em>Loading mortgages...</em></p>
+    <div class="fd-section-surface mb-4">
+        <div class="fd-skeleton-stack">
+            <SkeletonBlock Height="1.4rem" Width="14rem" />
+            <SkeletonBlock Height="0.95rem" Width="24rem" />
+            <SkeletonBlock Height="2.9rem" Width="100%" />
+        </div>
+    </div>
 }
 else if (!string.IsNullOrWhiteSpace(loadError))
 {
@@ -18,36 +24,67 @@ else if (!mortgageAccounts.Any())
 {
     <div class="alert alert-info">
         <p>No mortgage accounts found. Please create or import a mortgage account first.</p>
-        <p><a href="/accounts" class="btn btn-primary btn-sm">Go to Accounts</a></p>
+        <p class="mb-0"><a href="/accounts" class="btn btn-primary btn-sm">Go to Accounts</a></p>
     </div>
 }
 else
 {
-    <!-- Account Selector -->
-    <div class="card mb-4">
-        <div class="card-body">
-            <h5 class="card-title">Mortgage Account</h5>
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label">Select Account</label>
-                    <select class="form-select" @bind="selectedAccountId" @bind:after="OnAccountSelectedAsync">
-                        <option value="">-- Select a Mortgage Account --</option>
-                        @foreach (var account in mortgageAccounts)
-                        {
-                            <option value="@account.Id.ToString()">@account.Name</option>
-                        }
-                    </select>
-                </div>
+    <div class="fd-section-surface mb-4">
+        <div class="fd-section-title">
+            <div>
+                <h2>Mortgage register</h2>
+                <p>Select a mortgage account to open observed history, offset balances, and forecast assumptions together.</p>
+            </div>
+            <div class="fd-status-chip fd-status-chip--muted">@mortgageAccounts.Count mortgage account(s)</div>
+        </div>
+
+        <div class="fd-semantic-note mb-3">Historical balances remain the source of truth; the forecast updates only after valid assumption changes.</div>
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">Select Account</label>
+                <select class="form-select" @bind="selectedAccountId" @bind:after="OnAccountSelectedAsync">
+                    <option value="">-- Select a Mortgage Account --</option>
+                    @foreach (var account in mortgageAccounts)
+                    {
+                        <option value="@account.Id.ToString()">@account.Name</option>
+                    }
+                </select>
             </div>
         </div>
     </div>
 
-    <!-- Current Position -->
     @if (selectedAccountId != string.Empty && selectedAccount is not null)
     {
         @if (isAnalyzing)
         {
-            <p><em>Loading analysis...</em></p>
+            <div class="fd-section-surface mb-4">
+                <div class="fd-skeleton-stack">
+                    <SkeletonBlock Height="1.4rem" Width="16rem" />
+                    <SkeletonBlock Height="0.9rem" Width="30rem" />
+                    <div class="fd-skeleton-card fd-skeleton-chart d-flex align-items-end">
+                        <div class="fd-skeleton-stack w-100">
+                            <SkeletonBlock Height="1rem" Width="28%" />
+                            <SkeletonBlock Height="16rem" Width="100%" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                @for (var index = 0; index < 6; index++)
+                {
+                    <div class="col-sm-6 col-xl-3">
+                        <div class="fd-skeleton-card h-100">
+                            <div class="fd-skeleton-stack">
+                                <SkeletonBlock Height="0.8rem" Width="50%" />
+                                <SkeletonBlock Height="2rem" Width="78%" />
+                                <SkeletonBlock Height="0.75rem" Width="65%" />
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
         }
         else if (!string.IsNullOrWhiteSpace(analysisError))
         {
@@ -55,188 +92,245 @@ else
         }
         else if (currentPosition is not null)
         {
-            <div class="card mb-4">
-                <div class="card-body">
-                    <h5 class="card-title">Mortgage Balance</h5>
-                    @if (mortgageChartData.HasData)
+            <div class="fd-mortgage-hero mb-4 fd-section-refresh @(isForecastUpdating ? "fd-section-refresh--busy" : "fd-fade-in")">
+                <div class="fd-summary-banner">
+                    <div>
+                        <div class="fd-summary-banner__title">Observed principal versus projected payoff</div>
+                        <div class="fd-summary-banner__meta">Imported mortgage history is the factual baseline; payoff timing and interest-bearing balance change only with the current assumptions.</div>
+                    </div>
+                    <div class="fd-forecast-status @GetForecastStatusClass(forecastData?.Forecast?.Status)">
+                        <span aria-hidden="true">●</span>
+                        <span>@GetForecastStatusLabel(forecastData?.Forecast?.Status)</span>
+                    </div>
+                </div>
+
+                <div class="fd-mortgage-hero__stats">
+                    <div class="fd-mortgage-stat">
+                        <div class="fd-mortgage-stat__label">Current outstanding principal</div>
+                        <div class="fd-mortgage-stat__value fd-value--negative">@FormatCurrency(currentPosition.CurrentBalance)</div>
+                        <div class="fd-mortgage-stat__meta">Observed mortgage debt from imported history.</div>
+                    </div>
+                    <div class="fd-mortgage-stat">
+                        <div class="fd-mortgage-stat__label">Interest-bearing principal</div>
+                        <div class="fd-mortgage-stat__value @(currentPosition.InterestBearingBalance <= 0m ? "fd-value--positive" : "fd-value--negative")">@FormatCurrency(currentPosition.InterestBearingBalance)</div>
+                        <div class="fd-mortgage-stat__meta">Balance after applying current offset selections.</div>
+                    </div>
+                    <div class="fd-mortgage-stat">
+                        <div class="fd-mortgage-stat__label">Current offset balance</div>
+                        <div class="fd-mortgage-stat__value fd-value--positive">@FormatCurrency(currentPosition.TotalOffsetBalance)</div>
+                        <div class="fd-mortgage-stat__meta">Linked offsets reduce interest exposure, not the debt itself.</div>
+                    </div>
+                    <div class="fd-mortgage-stat">
+                        <div class="fd-mortgage-stat__label">Observed through</div>
+                        <div class="fd-mortgage-stat__value">@currentPosition.LatestDate.ToString("dd MMM yyyy")</div>
+                        <div class="fd-mortgage-stat__meta">@currentPosition.TransactionCount imported mortgage transaction(s).</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="fd-section-surface mb-4 fd-section-refresh @(isForecastUpdating ? "fd-section-refresh--busy" : "fd-fade-in")">
+                <div class="fd-section-title">
+                    <div>
+                        <h2>Balance history and forecast</h2>
+                        <p>Historical balances and projected payoff remain visually distinct so changing assumptions never masquerade as imported history.</p>
+                    </div>
+                </div>
+
+                <div class="fd-mortgage-chart-meta">
+                    <div class="fd-mortgage-chart-legend" aria-label="Chart legend">
+                        <span class="fd-chart-key"><span class="fd-chart-key__swatch fd-chart-key__swatch--historical"></span>Historical balance</span>
+                        <span class="fd-chart-key"><span class="fd-chart-key__swatch fd-chart-key__swatch--forecast"></span>Projected balance</span>
+                        @if (mortgageChartData.HasOffsetAdjustedBalance)
+                        {
+                            <span class="fd-chart-key"><span class="fd-chart-key__swatch fd-chart-key__swatch--offset"></span>Interest-bearing balance after offsets</span>
+                        }
+                    </div>
+
+                    @if (forecastData?.Forecast is not null)
                     {
-                        <ApexChart TItem="MortgageBalanceChartPointModel"
-                                   Height="380"
-                                   Options="mortgageChartOptions">
+                        <div class="fd-inline-stat">
+                            <span class="fd-inline-stat__label">Projected payoff</span>
+                            <span>@(forecastData.Forecast.ProjectedPayoffDate?.ToString("dd MMM yyyy") ?? "Not projected")</span>
+                        </div>
+                    }
+                </div>
+
+                @if (mortgageChartData.HasData)
+                {
+                    <ApexChart TItem="MortgageBalanceChartPointModel"
+                               Height="420"
+                               Options="mortgageChartOptions">
+                        <ApexPointSeries TItem="MortgageBalanceChartPointModel"
+                                         Items="mortgageChartData.HistoricalPoints"
+                                         Name="Historical balance"
+                                         SeriesType="SeriesType.Line"
+                                         XValue="point => point.Timestamp"
+                                         YValue="point => point.Balance"
+                                         Stroke="historicalSeriesStroke" />
+                        <ApexPointSeries TItem="MortgageBalanceChartPointModel"
+                                         Items="mortgageChartData.ForecastPoints"
+                                         Name="Forecast balance"
+                                         SeriesType="SeriesType.Line"
+                                         XValue="point => point.Timestamp"
+                                         YValue="point => point.Balance"
+                                         Stroke="forecastSeriesStroke" />
+                        @if (mortgageChartData.HasOffsetAdjustedBalance)
+                        {
                             <ApexPointSeries TItem="MortgageBalanceChartPointModel"
-                                             Items="mortgageChartData.HistoricalPoints"
-                                             Name="Historical balance"
+                                             Items="mortgageChartData.OffsetAdjustedHistoricalPoints"
+                                             Name="Historical balance (offset-adjusted)"
                                              SeriesType="SeriesType.Line"
                                              XValue="point => point.Timestamp"
                                              YValue="point => point.Balance"
-                                             Stroke="historicalSeriesStroke" />
+                                             Stroke="offsetAdjustedHistoricalSeriesStroke" />
                             <ApexPointSeries TItem="MortgageBalanceChartPointModel"
-                                             Items="mortgageChartData.ForecastPoints"
-                                             Name="Forecast balance"
+                                             Items="mortgageChartData.OffsetAdjustedForecastPoints"
+                                             Name="Forecast balance (offset-adjusted)"
                                              SeriesType="SeriesType.Line"
                                              XValue="point => point.Timestamp"
                                              YValue="point => point.Balance"
-                                             Stroke="forecastSeriesStroke" />
-                            @if (mortgageChartData.HasOffsetAdjustedBalance)
-                            {
-                                <ApexPointSeries TItem="MortgageBalanceChartPointModel"
-                                                 Items="mortgageChartData.OffsetAdjustedHistoricalPoints"
-                                                 Name="Historical balance (offsets)"
-                                                 SeriesType="SeriesType.Line"
-                                                 XValue="point => point.Timestamp"
-                                                 YValue="point => point.Balance"
-                                                 Stroke="offsetAdjustedHistoricalSeriesStroke" />
-                                <ApexPointSeries TItem="MortgageBalanceChartPointModel"
-                                                 Items="mortgageChartData.OffsetAdjustedForecastPoints"
-                                                 Name="Forecast balance (offsets)"
-                                                 SeriesType="SeriesType.Line"
-                                                 XValue="point => point.Timestamp"
-                                                 YValue="point => point.Balance"
-                                                 Stroke="offsetAdjustedForecastSeriesStroke" />
-                            }
-                        </ApexChart>
-                        <small class="text-muted d-block mt-2">
-                            Historical balances are observed from imported transactions. Forecast balances are projected from the latest observed mortgage balance until payoff.
-                            @if (mortgageChartData.HasOffsetAdjustedBalance)
-                            {
-                                <span> The offset-adjusted line reflects the interest-bearing balance after subtracting the currently selected offset balance.</span>
-                            }
-                        </small>
-                    }
-                    else
-                    {
-                        <p class="text-muted mb-0">No mortgage balance data is available yet.</p>
-                    }
+                                             Stroke="offsetAdjustedForecastSeriesStroke" />
+                        }
+                    </ApexChart>
+
+                    <div class="fd-chart-note">
+                        <span class="fd-chart-note__item">Observed values come from imported mortgage transactions.</span>
+                        <span class="fd-chart-note__item">Projected values update after every valid assumption change.</span>
+                        @if (forecastData?.Forecast?.ProjectedInterestFreeDate.HasValue == true)
+                        {
+                            <span class="fd-chart-note__item">Interest-free date: @forecastData.Forecast.ProjectedInterestFreeDate.Value.ToString("dd MMM yyyy")</span>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="fd-empty-state fd-empty-state--compact">No mortgage balance data is available yet.</div>
+                }
+            </div>
+
+            <div class="row g-3 mb-4 fd-metric-grid--mortgage fd-section-refresh @(isForecastUpdating ? "fd-section-refresh--busy" : string.Empty)">
+                <div class="col-sm-6 col-xl-3">
+                    <MetricCard Label="Mortgage owing" Value="@FormatCurrency(currentPosition.CurrentBalance)" ValueClass="fd-value--negative" SupportingText="Observed balance from imported history." AccentClass="fd-metric-card--danger" />
+                </div>
+                <div class="col-sm-6 col-xl-3">
+                    <MetricCard Label="Offset balance" Value="@FormatCurrency(currentPosition.TotalOffsetBalance)" ValueClass="fd-value--positive" SupportingText="Selected linked offset accounts." />
+                </div>
+                <div class="col-sm-6 col-xl-3">
+                    <MetricCard Label="Interest calculated on" Value="@FormatCurrency(currentPosition.InterestBearingBalance)" ValueClass="@(currentPosition.InterestBearingBalance <= 0m ? "fd-value--positive" : "fd-value--negative")" SupportingText="Effective balance after offsets." AccentClass="fd-metric-card--violet" />
+                </div>
+                <div class="col-sm-6 col-xl-3">
+                    <MetricCard Label="Annual rate" Value="@(currentPosition.EstimatedAnnualInterestRate.HasValue ? $"{currentPosition.EstimatedAnnualInterestRate.Value * 100m:F3}%" : "Not detected")" ValueClass="fd-value--strong" SupportingText="Derived from observed charges where available." />
+                </div>
+                <div class="col-sm-6 col-xl-3">
+                    <MetricCard Label="As of" Value="@currentPosition.LatestDate.ToString("dd MMM yyyy")" ValueClass="fd-value--strong" SupportingText="Most recent imported mortgage date." />
+                </div>
+                <div class="col-sm-6 col-xl-3">
+                    <MetricCard Label="Total repayments" Value="@FormatCurrency(currentPosition.TotalRepayments)" ValueClass="fd-value--positive" SupportingText="Total observed repayments in history." AccentClass="fd-metric-card--success" />
+                </div>
+                <div class="col-sm-6 col-xl-3">
+                    <MetricCard Label="Transactions" Value="@currentPosition.TransactionCount.ToString()" ValueClass="fd-value--strong" SupportingText="Imported mortgage transaction count." />
                 </div>
             </div>
 
-            <div class="card mb-4">
-                <div class="card-body">
-                    <h5 class="card-title">Current Position</h5>
-                    <div class="row">
-                        <div class="col-md-3">
-                            <strong>Mortgage owing:</strong>
-                            <p class="display-6">@FormatCurrency(currentPosition.CurrentBalance)</p>
-                        </div>
-                        <div class="col-md-3">
-                            <strong>Offset balance:</strong>
-                            <p class="display-6">@FormatCurrency(currentPosition.TotalOffsetBalance)</p>
-                        </div>
-                        <div class="col-md-3">
-                            <strong>Interest calculated on:</strong>
-                            <p class="display-6">@FormatCurrency(currentPosition.InterestBearingBalance)</p>
-                        </div>
-                        <div class="col-md-3">
-                            <strong>As of:</strong>
-                            <p>@currentPosition.LatestDate.ToString("dd MMM yyyy")</p>
-                        </div>
-                    </div>
-                    <div class="row mt-3">
-                        <div class="col-md-3">
-                            <strong>Total Repayments:</strong>
-                            <p>@FormatCurrency(currentPosition.TotalRepayments)</p>
-                        </div>
-                        <div class="col-md-3">
-                            <strong>Transactions:</strong>
-                            <p>@currentPosition.TransactionCount</p>
-                        </div>
-                    </div>
-                    <div class="alert alert-secondary mt-3 mb-0">
-                        Offset accounts reduce the balance on which interest is calculated. They do not directly reduce the mortgage principal.
-                    </div>
-                    @if (currentPosition.EarliestDate.HasValue)
-                    {
-                        <small class="text-muted d-block mt-2">
-                            Historical period: @currentPosition.EarliestDate.Value.ToString("dd MMM yyyy") to @currentPosition.LatestDate.ToString("dd MMM yyyy")
-                        </small>
-                    }
-                </div>
+            <div class="fd-danger-surface mb-4">
+                <div class="fd-danger-surface__title">Offsets reduce interest exposure, not the mortgage debt</div>
+                <div class="fd-semantic-note">A fully offset mortgage can reach zero interest-bearing principal before the outstanding mortgage balance is actually repaid.</div>
             </div>
 
-            <!-- Forecast Assumptions -->
-            <div class="card mb-4">
-                <div class="card-body">
-                    <h5 class="card-title">Forecast Assumptions</h5>
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label">Annual Interest Rate (%)</label>
-                            <input class="form-control" type="number" step="0.001" min="0" disabled="@isForecastUpdating" @bind="userAnnualInterestRatePercent" @bind:after="OnAssumptionsChangedAsync" />
-                            <small class="text-muted">Derived from observed interest charges when available; editable as a percentage.</small>
+            @if (currentPosition.EarliestDate.HasValue)
+            {
+                <div class="fd-semantic-note mb-4">
+                    Historical period: @currentPosition.EarliestDate.Value.ToString("dd MMM yyyy") to @currentPosition.LatestDate.ToString("dd MMM yyyy")
+                </div>
+            }
+
+            <div class="fd-section-surface mb-4 fd-section-refresh @(isForecastUpdating ? "fd-section-refresh--busy" : string.Empty)">
+                <div class="fd-section-title">
+                    <div>
+                        <h2>Forecast assumptions</h2>
+                        <p>Adjust rate, repayment amount, repayment frequency, and offsets without blurring the line between imported history and projected outcomes.</p>
+                    </div>
+                </div>
+
+                <div class="fd-assumption-grid">
+                    <div class="fd-assumption-card">
+                        <div class="fd-assumption-card__eyebrow">Interest rate assumption</div>
+                        <label class="form-label">Annual Interest Rate (%)</label>
+                        <input class="form-control" type="number" step="0.001" min="0" disabled="@isForecastUpdating" @bind="userAnnualInterestRatePercent" @bind:after="OnAssumptionsChangedAsync" />
+                        <div class="fd-assumption-card__meta">Derived from observed interest charges when available and always editable as a percentage.</div>
+                    </div>
+
+                    <div class="fd-assumption-card">
+                        <div class="fd-assumption-card__eyebrow">Detected repayment pattern</div>
+                        <div class="fd-assumption-card__value fd-value--positive">@(detectedRepaymentAmount.HasValue ? FormatCurrency(detectedRepaymentAmount.Value) : "Not detected yet")</div>
+                        <div class="fd-assumption-card__meta">@(detectedRepaymentsPerYear.HasValue ? GetFrequencyLabel(detectedRepaymentsPerYear.Value) : "Unknown repayment frequency")</div>
+                        <div class="fd-assumption-card__meta">@(detectionConfidence > 0 ? $"Detected from imported transactions with {detectionConfidence * 100:F0}% confidence" : "Forecasts use imported transaction history as the default repayment source")</div>
+                        @if (detectedRepaymentCount.HasValue)
+                        {
+                            <div class="fd-assumption-card__meta">Observed across @detectedRepaymentCount repayments</div>
+                        }
+                    </div>
+
+                    <div class="fd-assumption-card">
+                        <div class="fd-assumption-card__eyebrow">What-if repayment override</div>
+                        <label class="form-label">Repayment Amount</label>
+                        <div class="input-group mb-2">
+                            <span class="input-group-text">$</span>
+                            <input class="form-control" type="number" step="0.01" min="0" disabled="@isForecastUpdating" @bind="userRepaymentAmount" @bind:after="OnAssumptionsChangedAsync" />
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Detected repayment</label>
-                            <div class="border rounded p-2 bg-light">
-                                <div><strong>@(detectedRepaymentAmount.HasValue ? FormatCurrency(detectedRepaymentAmount.Value) : "Not detected yet")</strong></div>
-                                <div>@(detectedRepaymentsPerYear.HasValue ? GetFrequencyLabel(detectedRepaymentsPerYear.Value) : "Unknown frequency")</div>
-                                <div class="text-muted small">@(detectionConfidence > 0 ? $"Detected from imported transactions with {detectionConfidence * 100:F0}% confidence" : "Forecasts use imported transaction history as the default repayment source")</div>
-                                @if (detectedRepaymentCount.HasValue)
+                        <label class="form-label">Repayment Frequency</label>
+                        <select class="form-select mb-2" disabled="@isForecastUpdating" @bind="userRepaymentsPerYear" @bind:after="OnAssumptionsChangedAsync">
+                            <option value="0">Use detected frequency</option>
+                            <option value="1">Annually</option>
+                            <option value="2">Bi-annually</option>
+                            <option value="4">Quarterly</option>
+                            <option value="12">Monthly</option>
+                            <option value="24">Bi-weekly</option>
+                            <option value="26">Bi-weekly (26x)</option>
+                            <option value="52">Weekly</option>
+                        </select>
+                        <div class="fd-assumption-card__meta">Leave both unset to use the repayment pattern detected from imported transactions.</div>
+                        @if (HasRepaymentOverrides)
+                        {
+                            <button type="button" class="btn btn-outline-secondary btn-sm mt-2" @onclick="ClearRepaymentOverridesAsync">Clear overrides</button>
+                        }
+                    </div>
+
+                    <div class="fd-assumption-card fd-assumption-card--wide">
+                        <div class="fd-assumption-card__eyebrow">Selected offset accounts</div>
+                        @if (!eligibleOffsetAccounts.Any())
+                        {
+                            <div class="fd-empty-state fd-empty-state--compact">No eligible active imported accounts are available to link as offsets.</div>
+                        }
+                        else
+                        {
+                            <div class="fd-offset-grid">
+                                @foreach (var account in eligibleOffsetAccounts)
                                 {
-                                    <div class="text-muted small">Observed across @detectedRepaymentCount repayments</div>
+                                    <label class="fd-offset-option" for="offset-@account.Id">
+                                        <input class="form-check-input mt-1"
+                                               type="checkbox"
+                                               id="offset-@account.Id"
+                                               checked="@selectedOffsetAccountIds.Contains(account.Id)"
+                                               @onchange="@(args => OnOffsetAccountToggledAsync(account.Id, args.Value))" />
+                                        <span class="fd-offset-option__body">
+                                            <span class="fd-offset-option__title">@account.Name</span>
+                                            <span class="fd-semantic-note">Eligible active @account.Type offset account.</span>
+                                        </span>
+                                    </label>
                                 }
                             </div>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Optional what-if override</label>
-                            <div class="border rounded p-3">
-                                <div class="input-group mb-2">
-                                    <span class="input-group-text">$</span>
-                                    <input class="form-control" type="number" step="0.01" min="0" disabled="@isForecastUpdating" @bind="userRepaymentAmount" @bind:after="OnAssumptionsChangedAsync" />
-                                </div>
-                                <select class="form-select mb-2" disabled="@isForecastUpdating" @bind="userRepaymentsPerYear" @bind:after="OnAssumptionsChangedAsync">
-                                    <option value="0">Use detected frequency</option>
-                                    <option value="1">Annually</option>
-                                    <option value="2">Bi-annually</option>
-                                    <option value="4">Quarterly</option>
-                                    <option value="12">Monthly</option>
-                                    <option value="24">Bi-weekly</option>
-                                    <option value="26">Bi-weekly (26x)</option>
-                                    <option value="52">Weekly</option>
-                                </select>
-                                <small class="text-muted d-block">Leave these unset to use the repayment pattern detected from imported transactions.</small>
-                                @if (HasRepaymentOverrides)
-                                {
-                                    <button type="button" class="btn btn-outline-secondary btn-sm mt-2" @onclick="ClearRepaymentOverridesAsync">Clear overrides</button>
-                                }
-                            </div>
-                        </div>
-                        <div class="col-md-12">
-                            <label class="form-label">Offset Accounts</label>
-                            <div class="border rounded p-3 bg-light">
-                                @if (!eligibleOffsetAccounts.Any())
-                                {
-                                    <p class="mb-0 text-muted">No eligible active imported accounts are available to link as offsets.</p>
-                                }
-                                else
-                                {
-                                    <div class="row g-2">
-                                        @foreach (var account in eligibleOffsetAccounts)
-                                        {
-                                            <div class="col-md-4">
-                                                <div class="form-check">
-                                                    <input class="form-check-input"
-                                                           type="checkbox"
-                                                           id="offset-@account.Id"
-                                                           checked="@selectedOffsetAccountIds.Contains(account.Id)"
-                                                           @onchange="@(args => OnOffsetAccountToggledAsync(account.Id, args.Value))" />
-                                                    <label class="form-check-label" for="offset-@account.Id">@account.Name</label>
-                                                </div>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            </div>
-                            <small class="text-muted">Select existing linked accounts that reduce the balance on which mortgage interest is calculated.</small>
-                        </div>
+                        }
+                        <div class="fd-assumption-card__meta">Selected offsets reduce the balance on which mortgage interest is calculated; they do not directly reduce principal.</div>
                     </div>
                 </div>
             </div>
 
-            <!-- Forecast Results Loading/Error -->
             @if (isForecastUpdating)
             {
-                <div class="alert alert-info">
-                    <div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>
-                    <em>Calculating forecast with updated assumptions...</em>
+                <div class="fd-recalc-banner mb-4" role="status" aria-live="polite">
+                    <span>Recalculating forecast with the latest assumptions...</span>
+                    <span class="fd-semantic-note">Updated charts and summary cards will appear together once the latest response completes.</span>
                 </div>
             }
             @if (!string.IsNullOrWhiteSpace(forecastError))
@@ -246,68 +340,40 @@ else
                 </div>
             }
 
-            <!-- Forecast Information -->
             @if (forecastData is not null)
             {
-                <div class="card mb-4">
-                    <div class="card-body">
-                        <h5 class="card-title">Forecast Summary</h5>
-                        <div class="row">
-                            <div class="col-md-3">
-                                <strong>Status:</strong>
-                                <p>@GetForecastStatusLabel(forecastData.Forecast?.Status)</p>
-                                <small class="text-muted">Projection</small>
-                            </div>
-                            <div class="col-md-3">
-                                <strong>Payoff Date:</strong>
-                                <p>@(forecastData.Forecast?.ProjectedPayoffDate?.ToString("dd MMM yyyy") ?? "Not projected")</p>
-                                <small class="text-muted">Outstanding principal = $0</small>
-                            </div>
-                            <div class="col-md-3">
-                                <strong>Interest-Free Date:</strong>
-                                <p>@(forecastData.Forecast?.ProjectedInterestFreeDate?.ToString("dd MMM yyyy") ?? "Not reached")</p>
-                                <small class="text-muted">Interest-bearing principal = $0</small>
-                            </div>
-                            <div class="col-md-3">
-                                <strong>Future Interest:</strong>
-                                <p>@FormatCurrency(forecastData.Forecast?.TotalFutureInterest ?? 0m)</p>
-                                <small class="text-muted">Projection</small>
-                            </div>
+                <div class="fd-section-surface fd-section-refresh @(isForecastUpdating ? "fd-section-refresh--busy" : "fd-fade-in")">
+                    <div class="fd-section-title">
+                        <div>
+                            <h2>Forecast summary</h2>
+                            <p>Projected payoff, interest-free timing, and future interest remain separate so offset-driven interest relief is never confused with debt elimination.</p>
                         </div>
-                        <div class="row mt-3">
-                            <div class="col-md-3">
-                                <strong>Outstanding Principal:</strong>
-                                <p>@FormatCurrency(forecastData.Forecast?.CurrentOutstandingPrincipal ?? 0m)</p>
-                                <small class="text-muted">From history</small>
-                            </div>
-                            <div class="col-md-3">
-                                <strong>Offset Balance:</strong>
-                                <p>@FormatCurrency(forecastData.Forecast?.CurrentOffsetBalance ?? 0m)</p>
-                                <small class="text-muted">Selected accounts</small>
-                            </div>
-                            <div class="col-md-3">
-                                <strong>Effective Principal:</strong>
-                                <p>@FormatCurrency(forecastData.Forecast?.EffectivePrincipalAfterOffset ?? 0m)</p>
-                                <small class="text-muted">Interest-bearing amount</small>
-                            </div>
-                            <div class="col-md-3">
-                                <strong>Remaining Repayments:</strong>
-                                <p>@(forecastData.Forecast?.RemainingRepaymentCount ?? 0)</p>
-                                <small class="text-muted">Projected payment count</small>
-                            </div>
+                    </div>
+
+                    <div class="row g-3 fd-metric-grid--forecast">
+                        <div class="col-sm-6 col-xl-3">
+                            <MetricCard Label="Projected Payoff Date" Value="@(forecastData.Forecast?.ProjectedPayoffDate?.ToString("dd MMM yyyy") ?? "Not projected")" ValueClass="@(forecastData.Forecast?.ProjectedPayoffDate.HasValue == true ? "fd-value--positive" : "fd-value--muted")" SupportingText="Outstanding principal reaches zero." AccentClass="fd-metric-card--success" />
                         </div>
-                        <div class="row mt-3">
-                            <div class="col-md-3">
-                            </div>
-                            <div class="col-md-3">
-                            </div>
-                            <div class="col-md-3">
-                            </div>
-                            <div class="col-md-3">
-                                <strong>Future Repayments:</strong>
-                                <p>@FormatCurrency(forecastData.Forecast?.TotalFutureRepayments ?? 0m)</p>
-                                <small class="text-muted">Sum of forecast payments</small>
-                            </div>
+                        <div class="col-sm-6 col-xl-3">
+                            <MetricCard Label="Interest-Free Date" Value="@(forecastData.Forecast?.ProjectedInterestFreeDate?.ToString("dd MMM yyyy") ?? "Not reached")" ValueClass="@(forecastData.Forecast?.ProjectedInterestFreeDate.HasValue == true ? "fd-value--strong" : "fd-value--muted")" SupportingText="Interest-bearing principal reaches zero, which may occur before payoff." />
+                        </div>
+                        <div class="col-sm-6 col-xl-3">
+                            <MetricCard Label="Future Interest" Value="@FormatCurrency(forecastData.Forecast?.TotalFutureInterest ?? 0m)" ValueClass="fd-value--negative" SupportingText="Estimated future interest under the current assumptions." AccentClass="fd-metric-card--danger" />
+                        </div>
+                        <div class="col-sm-6 col-xl-3">
+                            <MetricCard Label="Remaining Repayments" Value="@((forecastData.Forecast?.RemainingRepaymentCount ?? 0).ToString())" ValueClass="fd-value--strong" SupportingText="Projected payment count until payoff." />
+                        </div>
+                        <div class="col-sm-6 col-xl-3">
+                            <MetricCard Label="Outstanding Principal" Value="@FormatCurrency(forecastData.Forecast?.CurrentOutstandingPrincipal ?? 0m)" ValueClass="fd-value--negative" SupportingText="Debt still to be repaid." />
+                        </div>
+                        <div class="col-sm-6 col-xl-3">
+                            <MetricCard Label="Selected Offset Balance" Value="@FormatCurrency(forecastData.Forecast?.CurrentOffsetBalance ?? 0m)" ValueClass="fd-value--positive" SupportingText="Linked offsets currently applied." />
+                        </div>
+                        <div class="col-sm-6 col-xl-3">
+                            <MetricCard Label="Interest-Bearing Principal" Value="@FormatCurrency(forecastData.Forecast?.EffectivePrincipalAfterOffset ?? 0m)" ValueClass="@((forecastData.Forecast?.EffectivePrincipalAfterOffset ?? 0m) <= 0m ? "fd-value--positive" : "fd-value--negative")" SupportingText="Amount still accruing interest after offsets." AccentClass="fd-metric-card--violet" />
+                        </div>
+                        <div class="col-sm-6 col-xl-3">
+                            <MetricCard Label="Future Repayments" Value="@FormatCurrency(forecastData.Forecast?.TotalFutureRepayments ?? 0m)" ValueClass="fd-value--positive" SupportingText="Sum of future payments under the current scenario." AccentClass="fd-metric-card--success" />
                         </div>
                     </div>
                 </div>
@@ -317,7 +383,7 @@ else
 }
 
 @code {
-    private readonly SeriesStroke historicalSeriesStroke = new() { Width = 3, DashSpace = 0, Color = "#994455"};
+    private readonly SeriesStroke historicalSeriesStroke = new() { Width = 3, DashSpace = 0, Color = "#994455" };
     private readonly SeriesStroke forecastSeriesStroke = new() { Width = 3, DashSpace = 8, Color = "#994455" };
     private readonly SeriesStroke offsetAdjustedHistoricalSeriesStroke = new() { Width = 2, DashSpace = 0, Color = "#554499" };
     private readonly SeriesStroke offsetAdjustedForecastSeriesStroke = new() { Width = 2, DashSpace = 8, Color = "#554499" };
@@ -617,34 +683,54 @@ else
             Chart = new Chart
             {
                 Toolbar = new Toolbar { Show = false },
-                Animations = new Animations { Enabled = false }
+                Animations = new Animations { Enabled = false },
+                Zoom = new Zoom { Enabled = false }
             },
+            Colors = ["#994455", "#994455", "#554499", "#554499"],
             Stroke = new Stroke
             {
                 Curve = Curve.Straight,
-                Width = [3, 3],
-                DashArray = [0, 8]
+                Width = [3, 3, 2, 2],
+                DashArray = [0, 8, 0, 8]
             },
             DataLabels = new DataLabels { Enabled = false },
             Markers = new Markers { Size = 0 },
+            Grid = new Grid
+            {
+                BorderColor = "rgba(15, 23, 42, 0.08)",
+                StrokeDashArray = 4
+            },
             Tooltip = new Tooltip
             {
                 Shared = true,
                 Intersect = false,
-                X = new TooltipX { Show = true }
+                X = new TooltipX { Show = true, Format = "dd MMM yyyy" },
+                Y = new TooltipY
+                {
+                    Formatter = "function(value) { return '$' + value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }"
+                }
             },
             Xaxis = new XAxis
             {
                 Type = XAxisType.Datetime,
-                Title = new AxisTitle { Text = "Date" }
+                Title = new AxisTitle { Text = "Timeline" },
+                Labels = new XAxisLabels
+                {
+                    DatetimeFormatter = new DatetimeFormatter
+                    {
+                        Year = "yyyy",
+                        Month = "MMM yyyy",
+                        Day = "dd MMM"
+                    }
+                }
             },
             Yaxis = [new YAxis
             {
                 Min = 0,
-                Title = new AxisTitle { Text = "Outstanding mortgage balance" },
+                Title = new AxisTitle { Text = "Outstanding balance" },
                 Labels = new YAxisLabels
                 {
-                    Formatter = "function(value) { return '$' + value.toLocaleString(); }"
+                    Formatter = "function(value) { return '$' + value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }"
                 }
             }],
             Annotations = new Annotations
@@ -670,8 +756,30 @@ else
             },
             Legend = new Legend
             {
-                Position = LegendPosition.Top
+                Position = LegendPosition.Top,
+                HorizontalAlign = Align.Left
             }
+        };
+    }
+
+    private static string GetForecastStatusValueClass(string? status)
+    {
+        return status switch
+        {
+            "PaidOff" => "fd-value--positive",
+            "Unavailable" => "fd-value--muted",
+            _ => "fd-value--strong"
+        };
+    }
+
+    private static string GetForecastStatusClass(string? status)
+    {
+        return status switch
+        {
+            "PaidOff" => "fd-forecast-status--positive",
+            "SafetyLimitReached" or "NonAmortising" => "fd-forecast-status--warning",
+            "Unavailable" => "fd-forecast-status--muted",
+            _ => string.Empty
         };
     }
 

@@ -5,15 +5,28 @@
 
 <PageTitle>Account Transactions</PageTitle>
 
-<div class="mb-3">
-    <a href="/accounts" class="btn btn-secondary">Back to Accounts</a>
-</div>
-
-<h1>@AccountName Transactions</h1>
+<PageHeader Eyebrow="Transactions" Title="@($"{AccountName} transactions")" Description="Review imported transaction history, filter the feed, and manage individual entries with confidence.">
+    <Actions>
+        <a href="/accounts" class="btn btn-outline-secondary">Back to Accounts</a>
+    </Actions>
+</PageHeader>
 
 @if (IsLoadingSummary)
 {
-    <p><em>Loading financial summary...</em></p>
+    <div class="row g-3 mb-4">
+        @for (var index = 0; index < 2; index++)
+        {
+            <div class="col-md-6">
+                <div class="fd-skeleton-card h-100">
+                    <div class="fd-skeleton-stack">
+                        <SkeletonBlock Height="0.85rem" Width="42%" />
+                        <SkeletonBlock Height="2.1rem" Width="78%" />
+                        <SkeletonBlock Height="0.8rem" Width="66%" />
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
 }
 else if (!string.IsNullOrWhiteSpace(SummaryError))
 {
@@ -21,115 +34,112 @@ else if (!string.IsNullOrWhiteSpace(SummaryError))
 }
 else if (DashboardSummary is not null)
 {
-    <div class="row g-3 mb-4">
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-body">
-                    <div class="text-muted">Overall Net Position</div>
-                    <div class="h4">@FormatCurrency(DashboardSummary.CurrentNetPosition)</div>
-                </div>
-            </div>
+    <div class="row g-3 mb-4 fd-fade-in fd-dashboard-support-grid">
+        <div class="col-12 col-lg-6">
+            <MetricCard Label="Overall net position"
+                        Value="@FormatCurrency(DashboardSummary.CurrentNetPosition)"
+                        ValueClass="@GetSignedValueClass(DashboardSummary.CurrentNetPosition)"
+                        SupportingText="Live position across every tracked account."
+                        AccentClass="fd-metric-card--success" />
         </div>
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-body">
-                    <div class="text-muted">@(SelectedAccountSummary?.AccountName ?? AccountName) Position</div>
-                    <div class="h4">
-                        @if (SelectedAccountSummary is not null)
-                        {
-                            @if (SelectedAccountSummary.IsLiability)
-                            {
-                                <span class="badge bg-danger">@FormatCurrency(SelectedAccountSummary.CurrentPosition) owing</span>
-                            }
-                            else
-                            {
-                                @FormatCurrency(SelectedAccountSummary.CurrentPosition)
-                            }
-                        }
-                        else
-                        {
-                            <span class="text-muted">—</span>
-                        }
-                    </div>
-                </div>
-            </div>
+        <div class="col-12 col-lg-6">
+            <MetricCard Label="Account position"
+                        Value="@(SelectedAccountSummary is not null ? $"{FormatCurrency(SelectedAccountSummary.CurrentPosition)}{(SelectedAccountSummary.IsLiability ? " owing" : string.Empty)}" : "—")"
+                        ValueClass="@(SelectedAccountSummary is null ? "fd-value--muted" : (SelectedAccountSummary.IsLiability ? "fd-value--negative" : "fd-value--positive"))"
+                        SupportingText="@(SelectedAccountSummary?.IsLiability == true ? "Liability balance for this account." : "Current observed position for this account.")"
+                        AccentClass="@(SelectedAccountSummary?.IsLiability == true ? "fd-metric-card--danger" : null)" />
         </div>
     </div>
 }
 
-<!--Filter and Sort Section-->
-<div class="card mb-4">
-    <div class="card-body">
-        <h5 class="card-title">Filter &amp; Sort</h5>
-        <form @onsubmit="ApplyFilters">
-            <div class="row mb-3">
-                <div class="col-md-3">
-                    <label class="form-label">From Date</label>
-                    <input type="date" class="form-control" @bind="FilterDateFrom" />
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">To Date</label>
-                    <input type="date" class="form-control" @bind="FilterDateTo" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Description</label>
-                    <input type="text" class="form-control" placeholder="Contains..." @bind="FilterDescription" />
-                </div>
-            </div>
-            <div class="row mb-3">
-                <div class="col-md-2">
-                    <label class="form-label">Min Amount</label>
-                    <input type="number" step="0.01" class="form-control" @bind="FilterMinAmount" />
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">Max Amount</label>
-                    <input type="number" step="0.01" class="form-control" @bind="FilterMaxAmount" />
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">Direction</label>
-                    <select class="form-select" @bind="FilterDirection">
-                        <option value="All">All</option>
-                        <option value="Positive">Income</option>
-                        <option value="Negative">Expense</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">Sort By</label>
-                    <select class="form-select" @bind="SortColumn">
-                        <option value="Date">Date</option>
-                        <option value="Description">Description</option>
-                        <option value="Amount">Amount</option>
-                        <option value="BankBalance">Balance</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">Order</label>
-                    <select class="form-select" @bind="SortOrder">
-                        <option value="Desc">Desc</option>
-                        <option value="Asc">Asc</option>
-                    </select>
-                </div>
-                <div class="col-md-2 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary w-100">Apply</button>
-                </div>
-            </div>
-            <div class="row">
-                <div class="col-12">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="ResetFilters">Clear Filters</button>
-                    <span class="ms-3 text-muted">Showing @transactions.Count transaction(s)</span>
-                    @if (transactions.Count > 0)
-                    {
-                        <span class="ms-2 text-muted">| Total: @FormatCurrency(transactions.Sum(t => t.Amount))</span>
-                    }
-                </div>
-            </div>
-        </form>
+<div class="fd-section-surface mb-4 fd-section-refresh @(IsLoading ? "fd-section-refresh--busy" : string.Empty)">
+    <div class="fd-section-title">
+        <div>
+            <h2>Filter and sort</h2>
+            <p>Narrow the transaction feed by date, amount, direction, and description while preserving imported bank balances.</p>
+        </div>
+        <div class="fd-status-chip fd-status-chip--muted">@transactions.Count transaction(s)</div>
     </div>
+
+    <form @onsubmit="ApplyFilters">
+        <div class="fd-toolbar-grid fd-toolbar-grid--filters">
+            <div class="fd-toolbar-span-3">
+                <label class="form-label">From Date</label>
+                <input type="date" class="form-control" @bind="FilterDateFrom" />
+            </div>
+            <div class="fd-toolbar-span-3">
+                <label class="form-label">To Date</label>
+                <input type="date" class="form-control" @bind="FilterDateTo" />
+            </div>
+            <div class="fd-toolbar-span-6">
+                <label class="form-label">Description</label>
+                <input type="text" class="form-control" placeholder="Contains..." @bind="FilterDescription" />
+            </div>
+            <div class="fd-toolbar-span-2">
+                <label class="form-label">Min Amount</label>
+                <input type="number" step="0.01" class="form-control" @bind="FilterMinAmount" />
+            </div>
+            <div class="fd-toolbar-span-2">
+                <label class="form-label">Max Amount</label>
+                <input type="number" step="0.01" class="form-control" @bind="FilterMaxAmount" />
+            </div>
+            <div class="fd-toolbar-span-2">
+                <label class="form-label">Direction</label>
+                <select class="form-select" @bind="FilterDirection">
+                    <option value="All">All</option>
+                    <option value="Positive">Income</option>
+                    <option value="Negative">Expense</option>
+                </select>
+            </div>
+            <div class="fd-toolbar-span-2">
+                <label class="form-label">Sort By</label>
+                <select class="form-select" @bind="SortColumn">
+                    <option value="Date">Date</option>
+                    <option value="Description">Description</option>
+                    <option value="Amount">Amount</option>
+                    <option value="BankBalance">Balance</option>
+                </select>
+            </div>
+            <div class="fd-toolbar-span-2">
+                <label class="form-label">Order</label>
+                <select class="form-select" @bind="SortOrder">
+                    <option value="Desc">Desc</option>
+                    <option value="Asc">Asc</option>
+                </select>
+            </div>
+            <div class="fd-toolbar-span-2 d-grid">
+                <button type="submit" class="btn btn-primary">Apply</button>
+            </div>
+        </div>
+        <div class="fd-toolbar-summary mt-3">
+            <div class="fd-semantic-note">Filter by date, direction, and description while keeping the imported bank balance context visible.</div>
+            <div class="fd-toolbar-actions">
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="ResetFilters">Clear Filters</button>
+                @if (transactions.Count > 0)
+                {
+                    <span class="fd-semantic-note">Visible total: <span class="fw-semibold @GetSignedValueClass(transactions.Sum(t => t.Amount))">@FormatCurrency(transactions.Sum(t => t.Amount))</span></span>
+                }
+            </div>
+        </div>
+    </form>
 </div>
 
 @if (IsLoading)
 {
-    <p><em>Loading transactions...</em></p>
+    <div class="fd-section-surface fd-table-surface">
+        <div class="p-4 fd-skeleton-table">
+            @for (var row = 0; row < 6; row++)
+            {
+                <div class="fd-skeleton-table__row">
+                    <SkeletonBlock Height="1.1rem" Width="100%" />
+                    <SkeletonBlock Height="1.1rem" Width="100%" />
+                    <SkeletonBlock Height="1.1rem" Width="100%" />
+                    <SkeletonBlock Height="1.1rem" Width="100%" />
+                    <SkeletonBlock Height="1.1rem" Width="100%" />
+                </div>
+            }
+        </div>
+    </div>
 }
 else if (!string.IsNullOrWhiteSpace(LoadError))
 {
@@ -141,40 +151,57 @@ else if (transactions.Count == 0)
 }
 else
 {
-    <div class="table-responsive">
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th><a href="#" @onclick:preventDefault @onclick="@(() => UpdateSort("Date"))" style="cursor: pointer; text-decoration: none;">Date @GetSortIndicator("Date")</a></th>
-                    <th><a href="#" @onclick:preventDefault @onclick="@(() => UpdateSort("Description"))" style="cursor: pointer; text-decoration: none;">Description @GetSortIndicator("Description")</a></th>
-                    <th><a href="#" @onclick:preventDefault @onclick="@(() => UpdateSort("Amount"))" style="cursor: pointer; text-decoration: none;">Amount @GetSortIndicator("Amount")</a></th>
-                    <th><a href="#" @onclick:preventDefault @onclick="@(() => UpdateSort("BankBalance"))" style="cursor: pointer; text-decoration: none;">Bank Balance @GetSortIndicator("BankBalance")</a></th>
-                    <th>Imported</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var transaction in transactions)
-                {
+    <div class="fd-section-surface fd-table-surface fd-fade-in">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle fd-transaction-table">
+                <thead>
                     <tr>
-                        <td>@transaction.Date.ToLongDateString()</td>
-                        <td>@transaction.Description</td>
-                        <td class="text-end">
-                            <span class="@(transaction.Amount >= 0 ? "text-success" : "text-danger")">
-                                @transaction.Amount.ToString("C")
-                            </span>
-                        </td>
-                        <td class="text-end">@transaction.BankBalance.ToString("C")</td>
-                        <td>@transaction.ImportedUtc.ToString("g")</td>
-                        <td>
-                            <button class="btn btn-sm btn-danger" @onclick="() => OnDeleteClick(transaction)" title="Delete this transaction">
-                                Delete
-                            </button>
-                        </td>
+                        <th><a href="#" class="fd-table-sort" @onclick:preventDefault @onclick="@(() => UpdateSortAsync("Date"))">Date @GetSortIndicator("Date")</a></th>
+                        <th><a href="#" class="fd-table-sort" @onclick:preventDefault @onclick="@(() => UpdateSortAsync("Description"))">Description @GetSortIndicator("Description")</a></th>
+                        <th class="text-end"><a href="#" class="fd-table-sort" @onclick:preventDefault @onclick="@(() => UpdateSortAsync("Amount"))">Amount @GetSortIndicator("Amount")</a></th>
+                        <th class="text-end"><a href="#" class="fd-table-sort" @onclick:preventDefault @onclick="@(() => UpdateSortAsync("BankBalance"))">Bank balance @GetSortIndicator("BankBalance")</a></th>
+                        <th>Imported</th>
+                        <th class="text-end">Actions</th>
                     </tr>
-                }
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @foreach (var transaction in transactions)
+                    {
+                        <tr>
+                            <td>
+                                <div class="fd-transaction-date">
+                                    <div class="fd-transaction-date__title">@transaction.Date.ToString("dd MMM yyyy")</div>
+                                    <div class="fd-transaction-date__meta">Transaction date</div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="fd-transaction-description">
+                                    <div class="fd-transaction-description__title">@transaction.Description</div>
+                                    <div class="fd-transaction-description__meta">@transaction.ImportedUtc.ToString("dd MMM yyyy 'at' HH:mm")</div>
+                                </div>
+                            </td>
+                            <td class="text-end">
+                                <span class="fw-semibold @GetSignedValueClass(transaction.Amount)">
+                                    @transaction.Amount.ToString("C")
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                <div class="fd-transaction-balance">
+                                    <div class="fd-transaction-balance__title @GetSignedValueClass(transaction.BankBalance)">@transaction.BankBalance.ToString("C")</div>
+                                    <div class="fd-transaction-balance__meta">Running bank balance</div>
+                                </div>
+                            </td>
+                            <td><span class="fd-semantic-note">@transaction.ImportedUtc.ToString("g")</span></td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => OnDeleteClick(transaction)" title="Delete this transaction">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     </div>
 }
 
@@ -343,7 +370,7 @@ else
         await ApplyFilters();
     }
 
-    private void UpdateSort(string column)
+    private async Task UpdateSortAsync(string column)
     {
         if (SortColumn == column)
         {
@@ -354,9 +381,8 @@ else
             SortColumn = column;
             SortOrder = "Desc";
         }
-        IsLoading = true;
-        _ = LoadTransactionsAsync();
-        IsLoading = false;
+
+        await ApplyFilters();
     }
 
     private string GetSortIndicator(string column)
@@ -364,6 +390,21 @@ else
         if (SortColumn != column)
             return "";
         return SortOrder == "Asc" ? "↑" : "↓";
+    }
+
+    private static string GetSignedValueClass(decimal value)
+    {
+        if (value > 0)
+        {
+            return "fd-value--positive";
+        }
+
+        if (value < 0)
+        {
+            return "fd-value--negative";
+        }
+
+        return "fd-value--strong";
     }
 
     private string FormatCurrency(decimal value)

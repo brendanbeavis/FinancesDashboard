@@ -5,14 +5,15 @@
 
 <PageTitle>Accounts</PageTitle>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>Accounts</h1>
-    <button class="btn btn-success" @onclick="OnAddAccountClick">+ Add Account</button>
-</div>
+<PageHeader Eyebrow="Data Sources" Title="Accounts" Description="Manage the accounts that power reporting, imports, and mortgage analysis.">
+    <Actions>
+        <button class="btn btn-success" @onclick="OnAddAccountClick">+ Add Account</button>
+    </Actions>
+</PageHeader>
 
 @if (isLoading)
 {
-    <p><em>Loading accounts...</em></p>
+    <div class="fd-section-surface"><em>Loading accounts...</em></div>
 }
 else if (!string.IsNullOrWhiteSpace(loadError))
 {
@@ -24,31 +25,54 @@ else if (accounts.Count == 0)
 }
 else
 {
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Active</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var account in accounts)
-            {
-                <tr>
-                    <td>@account.Name</td>
-                    <td>@account.Type</td>
-                    <td>@(account.IsActive ? "Yes" : "No")</td>
-                    <td>
-                        <button class="btn btn-sm btn-primary" @onclick="() => OnEditClick(account)">Edit</button>
-                        <button class="btn btn-sm btn-success ms-2" @onclick="() => OnViewClick(account)">View Transactions</button>
-                        <button class="btn btn-sm btn-warning ms-2" @onclick="() => OnImportClick(account)">Import Data</button>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div class="fd-section-surface fd-table-surface">
+        <div class="fd-section-title px-4 pt-4 pb-2">
+            <div>
+                <h2>Account register</h2>
+                <p>Each account is the source of reporting, transaction drill-downs, and mortgage analysis.</p>
+            </div>
+            <div class="fd-status-chip fd-status-chip--muted">@accounts.Count account(s) · @accounts.Count(a => a.IsActive) active</div>
+        </div>
+
+        <div class="px-4 pb-3 fd-semantic-note">Inactive accounts remain visible for review, but they are excluded from active reporting.</div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle fd-account-list-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var account in accounts)
+                    {
+                        <tr>
+                            <td>
+                                <div class="fd-account-name">
+                                    <div class="fd-account-name__title">@account.Name</div>
+                                    <div class="fd-account-name__meta">@account.Type account · @(account.IsActive ? "included in reporting" : "review only")</div>
+                                </div>
+                            </td>
+                            <td><span class="@GetAccountTypeChipClass(account.Type)">@account.Type</span></td>
+                            <td>
+                                <span class="fd-status-chip @(account.IsActive ? "fd-status-chip--positive" : "fd-status-chip--muted")">@(account.IsActive ? "Active" : "Inactive")</span>
+                            </td>
+                            <td class="text-end">
+                                <div class="d-inline-flex gap-2 flex-wrap justify-content-end fd-account-actions">
+                                    <button class="btn btn-sm btn-primary" @onclick="() => OnEditClick(account)">Edit</button>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => OnViewClick(account)">View Transactions</button>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => OnImportClick(account)">Import Data</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
 }
 
 <CreateAccountModal 
@@ -174,6 +198,16 @@ else
         {
             loadError = $"Unable to delete account: {ex.Message}";
         }
+    }
+
+    private static string GetAccountTypeChipClass(string accountType)
+    {
+        return accountType switch
+        {
+            "Mortgage" or "CreditCard" => "fd-status-chip fd-status-chip--negative",
+            "Savings" or "Investment" => "fd-status-chip fd-status-chip--positive",
+            _ => "fd-status-chip fd-status-chip--muted"
+        };
     }
 
     private Task OnEditClose(AccountModel? _)

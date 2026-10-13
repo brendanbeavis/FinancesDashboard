@@ -1,0 +1,55 @@
+<div class="@BuildClassName()" role="status">
+    <div class="fd-empty-state__content">
+        @if (!string.IsNullOrWhiteSpace(Title))
+        {
+            <div class="fd-empty-state__title">@Title</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(Description))
+        {
+            <div class="fd-empty-state__description">@Description</div>
+        }
+
+        @if (ChildContent is not null)
+        {
+            <div class="fd-empty-state__actions">@ChildContent</div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string? Title { get; set; }
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    [Parameter]
+    public bool Compact { get; set; }
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private string BuildClassName()
+    {
+        var classes = new List<string> { "fd-empty-state" };
+
+        if (Compact)
+        {
+            classes.Add("fd-empty-state--compact");
+        }
+
+        if (!string.IsNullOrWhiteSpace(Class))
+        {
+            classes.Add(Class);
+        }
+
+        return string.Join(" ", classes);
+    }
+}
+
+@using Microsoft.AspNetCore.Components
+@using System.Collections.Generic

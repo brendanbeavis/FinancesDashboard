@@ -5,54 +5,286 @@
 
 <PageTitle>Dashboard</PageTitle>
 
-<h1>Dashboard</h1>
+<PageHeader
+    Eyebrow="Overview"
+    Title="Dashboard"
+    Description="Track net position, cash, liabilities, and recent account movement from one polished finance overview." />
 
-@if (isLoading)
-{
-    <p><em>Loading dashboard...</em></p>
-}
-else if (!string.IsNullOrWhiteSpace(loadError))
+@if (!string.IsNullOrWhiteSpace(loadError))
 {
     <div class="alert alert-danger">@loadError</div>
 }
 else
 {
-    <div class="row g-3 mb-4">
-        <div class="col-md-3">
-            <div class="card"><div class="card-body"><div class="text-muted">Net Position</div><div class="h4">@FormatCurrency(summary.CurrentNetPosition)</div></div></div>
-        </div>
-        <div class="col-md-3">
-            <div class="card"><div class="card-body"><div class="text-muted">Cash</div><div class="h4">@FormatCurrency(summary.CurrentCashPosition)</div></div></div>
-        </div>
-        <div class="col-md-3">
-            <div class="card"><div class="card-body"><div class="text-muted">Credit Card</div><div class="h4">@FormatCurrency(summary.CurrentCreditCardPosition)</div></div></div>
-        </div>
-        <div class="col-md-3">
-            <div class="card"><div class="card-body"><div class="text-muted">Mortgage</div><div class="h4">@FormatCurrency(summary.CurrentMortgagePosition)</div></div></div>
-        </div>
+    <div class="row g-3 mb-4 fd-dashboard-lead">
+        @if (isLoading)
+        {
+            <div class="col-12 col-xxl-7">
+                <div class="fd-skeleton-card h-100">
+                    <div class="fd-skeleton-stack">
+                        <SkeletonBlock Height="0.85rem" Width="34%" />
+                        <SkeletonBlock Height="2.6rem" Width="70%" />
+                        <SkeletonBlock Height="0.85rem" Width="58%" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xxl-5">
+                <div class="row g-3 fd-dashboard-support-grid">
+                    @for (var index = 0; index < 3; index++)
+                    {
+                        <div class="col-6 col-lg-4 col-xxl-12">
+                            <div class="fd-skeleton-card h-100">
+                                <div class="fd-skeleton-stack">
+                                    <SkeletonBlock Height="0.8rem" Width="48%" />
+                                    <SkeletonBlock Height="2rem" Width="76%" />
+                                    <SkeletonBlock Height="0.8rem" Width="64%" />
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="col-12 col-xxl-7">
+                <MetricCard Label="Overall Net Position"
+                            Value="@FormatCurrency(summary.CurrentNetPosition)"
+                            ValueClass="@GetSignedValueClass(summary.CurrentNetPosition)"
+                            SupportingText="@GetNetPositionSupportingText()"
+                            AccentClass="fd-metric-card--success fd-metric-card--hero" />
+            </div>
+
+            <div class="col-12 col-xxl-5">
+                <div class="row g-3 fd-dashboard-support-grid">
+                    <div class="col-6 col-lg-4 col-xxl-12">
+                        <MetricCard Label="Cash &amp; Savings"
+                                    Value="@FormatCurrency(summary.CurrentCashPosition)"
+                                    ValueClass="fd-value--positive"
+                                    SupportingText="@GetCashSupportingText()" />
+                    </div>
+                    <div class="col-6 col-lg-4 col-xxl-12">
+                        <MetricCard Label="Credit Card Liabilities"
+                                    Value="@FormatCurrency(summary.CurrentCreditCardPosition)"
+                                    ValueClass="fd-value--negative"
+                                    SupportingText="@GetLiabilitySupportingText("CreditCard", "credit card")"
+                                    AccentClass="fd-metric-card--danger" />
+                    </div>
+                    <div class="col-12 col-lg-4 col-xxl-12">
+                        <MetricCard Label="Mortgage Debt"
+                                    Value="@FormatCurrency(Math.Abs(summary.CurrentMortgagePosition))"
+                                    ValueClass="fd-value--negative"
+                                    SupportingText="@GetLiabilitySupportingText("Mortgage", "mortgage")"
+                                    AccentClass="fd-metric-card--violet" />
+                    </div>
+                </div>
+            </div>
+        }
     </div>
 
-    <h2 class="mt-5">Account Overview</h2>
-    @if (accountSummaries.Count == 0)
+    @if (!isLoading && accountSummaries.Count == 0)
     {
         <div class="alert alert-info" role="status">
-            <p>No accounts to display. <a href="/accounts">Add an account</a> to get started.</p>
+            <p class="mb-0">No accounts to display. <a href="/accounts">Add an account</a> to get started.</p>
         </div>
     }
     else
     {
-        <!-- Filter form -->
-        <div class="card mb-3">
-            <div class="card-body">
-                <h5 class="card-title">Filter Accounts</h5>
-                <div class="row mb-2">
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-xxl-8">
+                <div class="fd-section-surface fd-chart-surface h-100 fd-section-refresh @(isVisualsLoading ? "fd-section-refresh--busy" : "fd-fade-in")">
+                    <div class="fd-section-title">
+                        <div>
+                            <h2>Net position history</h2>
+                            <p>Observed net position only, aggregated from the latest known account balances on each reporting date.</p>
+                        </div>
+                        <div class="d-flex flex-column align-items-xxl-end gap-2">
+                            <div class="fd-status-chip fd-status-chip--muted">Observed data only</div>
+                            @if (!isVisualsLoading && latestObservedHistoryDate.HasValue)
+                            {
+                                <div class="fd-semantic-note">Latest observed date: @latestObservedHistoryDate.Value.ToString("dd MMM yyyy")</div>
+                            }
+                        </div>
+                    </div>
+
+                    @if (isLoading || isVisualsLoading)
+                    {
+                        <div class="fd-skeleton-card fd-skeleton-chart d-flex align-items-end">
+                            <div class="fd-skeleton-stack w-100">
+                                <SkeletonBlock Height="1rem" Width="28%" />
+                                <SkeletonBlock Height="16rem" Width="100%" />
+                            </div>
+                        </div>
+                    }
+                    else if (HasNetPositionHistory)
+                    {
+                        <ApexChart TItem="DashboardNetPositionChartPointModel"
+                                   Height="320"
+                                   Options="netPositionChartOptions">
+                            <ApexPointSeries TItem="DashboardNetPositionChartPointModel"
+                                             Items="netPositionHistory"
+                                             Name="Net position"
+                                             SeriesType="SeriesType.Line"
+                                             XValue="point => point.Timestamp"
+                                             YValue="point => point.NetPosition"
+                                             Stroke="netPositionSeriesStroke" />
+                        </ApexChart>
+                    }
+                    else
+                    {
+                        <div class="fd-empty-state">Not enough observed balance history is available yet to chart net position over time.</div>
+                    }
+                </div>
+            </div>
+
+            <div class="col-12 col-xxl-4">
+                <div class="fd-section-surface fd-chart-surface h-100 fd-section-refresh @(isVisualsLoading ? "fd-section-refresh--busy" : "fd-fade-in")">
+                    <div class="fd-section-title">
+                        <div>
+                            <h2>Previous month cash flow</h2>
+                            <p>Income versus expenses for the accounts with the clearest completed-month activity.</p>
+                        </div>
+                    </div>
+
+                    @if (isLoading || isVisualsLoading)
+                    {
+                        <div class="fd-skeleton-card fd-skeleton-chart d-flex align-items-end">
+                            <div class="fd-skeleton-stack w-100">
+                                <SkeletonBlock Height="1rem" Width="52%" />
+                                <SkeletonBlock Height="16rem" Width="100%" />
+                            </div>
+                        </div>
+                    }
+                    else if (HasPreviousMonthActivityChart)
+                    {
+                        <ApexChart TItem="DashboardActivityChartPointModel"
+                                   Height="320"
+                                   Options="previousMonthActivityChartOptions">
+                            <ApexPointSeries TItem="DashboardActivityChartPointModel"
+                                             Items="previousMonthActivityPoints"
+                                             Name="Income"
+                                             SeriesType="SeriesType.Bar"
+                                             XValue="point => point.AccountName"
+                                             YValue="point => point.Income" />
+                            <ApexPointSeries TItem="DashboardActivityChartPointModel"
+                                             Items="previousMonthActivityPoints"
+                                             Name="Expenses"
+                                             SeriesType="SeriesType.Bar"
+                                             XValue="point => point.AccountName"
+                                             YValue="point => point.Expenses" />
+                        </ApexChart>
+                    }
+                    else
+                    {
+                        <div class="fd-empty-state">No previous-month income or expense activity is available yet.</div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="fd-section-surface fd-chart-surface mb-4 fd-section-refresh @(isVisualsLoading ? "fd-section-refresh--busy" : "fd-fade-in")">
+            <div class="fd-section-title">
+                <div>
+                    <h2>Account balance trends</h2>
+                    <p>Observed balance history for the most material accounts. Liabilities are shown as amount owing.</p>
+                </div>
+                @if (isLoading || isVisualsLoading)
+                {
+                    <SkeletonBlock Height="2rem" Width="10rem" Class="ms-xxl-auto" />
+                }
+                else
+                {
+                    <div class="fd-status-chip fd-status-chip--muted">Top @trendAccounts.Count account(s)</div>
+                }
+            </div>
+
+            @if (isLoading || isVisualsLoading)
+            {
+                <div class="fd-skeleton-card fd-skeleton-chart d-flex align-items-end">
+                    <div class="fd-skeleton-stack w-100">
+                        <SkeletonBlock Height="1rem" Width="32%" />
+                        <SkeletonBlock Height="16rem" Width="100%" />
+                    </div>
+                </div>
+            }
+            else if (HasAccountTrendHistory)
+            {
+                <ApexChart TItem="DashboardAccountTrendChartPointModel"
+                           Height="320"
+                           Options="accountTrendChartOptions">
+                    @foreach (var trendAccount in trendAccounts)
+                    {
+                        var seriesName = GetTrendSeriesName(trendAccount);
+                        <ApexPointSeries TItem="DashboardAccountTrendChartPointModel"
+                                         Items="GetTrendSeriesPoints(seriesName)"
+                                         Name="@seriesName"
+                                         SeriesType="SeriesType.Line"
+                                         XValue="point => point.Timestamp"
+                                         YValue="point => point.Balance"
+                                         Stroke="accountTrendSeriesStroke" />
+                    }
+                </ApexChart>
+            }
+            else
+            {
+                <div class="fd-empty-state">Not enough multi-point balance history is available yet to compare account trends.</div>
+            }
+        </div>
+
+        @if (isLoading)
+        {
+            <div class="fd-section-surface mb-4">
+                <div class="fd-skeleton-stack">
+                    <SkeletonBlock Height="1.4rem" Width="16rem" />
+                    <SkeletonBlock Height="0.9rem" Width="28rem" />
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-6">
+                            <SkeletonBlock Height="2.9rem" Width="100%" />
+                        </div>
+                        <div class="col-md-6">
+                            <SkeletonBlock Height="2.9rem" Width="100%" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="fd-section-surface fd-table-surface">
+                <div class="p-4 fd-skeleton-table">
+                    @for (var row = 0; row < 5; row++)
+                    {
+                        <div class="fd-skeleton-table__row">
+                            <SkeletonBlock Height="1.1rem" Width="100%" />
+                            <SkeletonBlock Height="1.1rem" Width="100%" />
+                            <SkeletonBlock Height="1.1rem" Width="100%" />
+                            <SkeletonBlock Height="1.1rem" Width="100%" />
+                            <SkeletonBlock Height="1.1rem" Width="100%" />
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="fd-section-surface mb-4 fd-fade-in">
+                <div class="fd-section-title">
+                    <div>
+                        <h2>Account overview</h2>
+                        <p>Scan current positions, recent movement, and account state without leaving the dashboard.</p>
+                    </div>
+                    <div class="fd-status-chip fd-status-chip--muted">@filteredCount of @accountSummaries.Count accounts shown</div>
+                </div>
+
+                <div class="fd-semantic-note mb-3">Rows open the full transaction view and keep the account summary visible for quick comparison.</div>
+
+                <div class="row g-3 mb-2">
                     <div class="col-md-6">
                         <label class="form-label">Account Name</label>
-                        <input type="text" class="form-control" placeholder="Search by name..." @bind="filterAccountName" @bind:event="oninput" />
+                        <input type="text" class="form-control" placeholder="Search by name..." @bind="filterAccountName" @bind:event="oninput" @bind:after="UpdateFilteredCount" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Account Type</label>
-                        <select class="form-select" @bind="filterAccountType" @bind:event="onchange">
+                        <select class="form-select" @bind="filterAccountType" @bind:event="onchange" @bind:after="UpdateFilteredCount">
                             <option value="">All Types</option>
                             <option value="Transaction">Transaction</option>
                             <option value="Savings">Savings</option>
@@ -62,227 +294,185 @@ else
                             <option value="Other">Other</option>
                         </select>
                     </div>
-                </div>
-                <div class="row mb-2">
-                    <div class="col-md-6">
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input" id="filterActivity" @bind="filterWithActivityOnly" @bind:event="onchange" />
+                    <div class="col-md-8 col-lg-6">
+                        <div class="form-check mt-2">
+                            <input type="checkbox" class="form-check-input" id="filterActivity" @bind="filterWithActivityOnly" @bind:event="onchange" @bind:after="UpdateFilteredCount" />
                             <label class="form-check-label" for="filterActivity">
                                 Only show accounts with previous month activity
                             </label>
                         </div>
                     </div>
-                </div>
-                <div class="row">
-                    <div class="col-12">
+                    <div class="col-md-4 col-lg-6 d-flex justify-content-md-end align-items-start align-items-md-end">
                         <button class="btn btn-outline-secondary btn-sm" @onclick="ResetFilters">Clear Filters</button>
-                        <span class="ms-3 text-muted">Showing @filteredCount of @accountSummaries.Count account(s)</span>
                     </div>
                 </div>
             </div>
-        </div>
 
-        @if (filteredCount == 0)
-        {
-            <div class="alert alert-secondary">No accounts match the current filters.</div>
-        }
-        else
-        {
-            <div class="table-responsive">
-            <table class="table table-striped table-hover" role="grid">
-                <thead>
-                    <tr>
-                        <th>
-                            <a @onclick="() => UpdateSortBy(SortColumn.AccountName)" 
-                               style="cursor: pointer;"
-                               role="button"
-                               tabindex="0"
-                               @onkeydown="(KeyboardEventArgs e) => HandleSortKeydown(e, SortColumn.AccountName)"
-                               aria-sort="@GetAriaSort(SortColumn.AccountName)">
-                                Account @(currentSort == SortColumn.AccountName ? (sortAscending ? "▲" : "▼") : "")
-                            </a>
-                        </th>
-                        <th>
-                            <a @onclick="@(() => UpdateSortBy(SortColumn.AccountType))" 
-                               style="cursor: pointer; text-decoration: none;"
-                               role="button"
-                               tabindex="0"
-                               @onkeydown="(KeyboardEventArgs e) => HandleSortKeydown(e, SortColumn.AccountType)"
-                               aria-sort="@GetAriaSort(SortColumn.AccountType)">
-                                Type @(currentSort == SortColumn.AccountType ? (sortAscending ? "▲" : "▼") : "")
-                            </a>
-                        </th>
-                        <th class="text-end">
-                            <a @onclick="() => UpdateSortBy(SortColumn.CurrentPosition)" 
-                               style="cursor: pointer;"
-                               role="button"
-                               tabindex="0"
-                               @onkeydown="(KeyboardEventArgs e) => HandleSortKeydown(e, SortColumn.CurrentPosition)"
-                               aria-sort="@GetAriaSort(SortColumn.CurrentPosition)">
-                                Current Position @(currentSort == SortColumn.CurrentPosition ? (sortAscending ? "▲" : "▼") : "")
-                            </a>
-                        </th>
-                        <th class="text-end">
-                            <a @onclick="@(() => UpdateSortBy(SortColumn.PreviousMonthIncome))" 
-                               style="cursor: pointer; text-decoration: none;"
-                               role="button"
-                               tabindex="0"
-                               @onkeydown="(KeyboardEventArgs e) => HandleSortKeydown(e, SortColumn.PreviousMonthIncome)"
-                               aria-sort="@GetAriaSort(SortColumn.PreviousMonthIncome)">
-                                Prev Month Income @(currentSort == SortColumn.PreviousMonthIncome ? (sortAscending ? "▲" : "▼") : "")
-                            </a>
-                        </th>
-                        <th class="text-end">
-                            <a @onclick="@(() => UpdateSortBy(SortColumn.PreviousMonthExpenses))" 
-                               style="cursor: pointer; text-decoration: none;"
-                               role="button"
-                               tabindex="0"
-                               @onkeydown="(KeyboardEventArgs e) => HandleSortKeydown(e, SortColumn.PreviousMonthExpenses)"
-                               aria-sort="@GetAriaSort(SortColumn.PreviousMonthExpenses)">
-                                Prev Month Expenses @(currentSort == SortColumn.PreviousMonthExpenses ? (sortAscending ? "▲" : "▼") : "")
-                            </a>
-                        </th>
-                        <th class="text-end">
-                            <a @onclick="() => UpdateSortBy(SortColumn.PreviousMonthNet)" 
-                               style="cursor: pointer;"
-                               role="button"
-                               tabindex="0"
-                               @onkeydown="(KeyboardEventArgs e) => HandleSortKeydown(e, SortColumn.PreviousMonthNet)"
-                               aria-sort="@GetAriaSort(SortColumn.PreviousMonthNet)">
-                                Prev Month Net @(currentSort == SortColumn.PreviousMonthNet ? (sortAscending ? "▲" : "▼") : "")
-                            </a>
-                        </th>
-                        <th>
-                            <a @onclick="() => UpdateSortBy(SortColumn.LastTransaction)" 
-                               style="cursor: pointer;"
-                               role="button"
-                               tabindex="0"
-                               @onkeydown="(KeyboardEventArgs e) => HandleSortKeydown(e, SortColumn.LastTransaction)"
-                               aria-sort="@GetAriaSort(SortColumn.LastTransaction)">
-                                Last Transaction @(currentSort == SortColumn.LastTransaction ? (sortAscending ? "▲" : "▼") : "")
-                            </a>
-                        </th>
-                        <th class="text-center">Transactions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var summary in GetFilteredAndSortedSummaries())
-                    {
-                        <tr class="account-row" @onclick="() => NavigateToAccount(summary.AccountId)" role="button" tabindex="0" @onkeydown="e => HandleKeyDown(e, summary.AccountId)">
-                            <td>
-                                <a href="/accounts/@summary.AccountId/transactions" class="account-link">
-                                    @summary.AccountName
-                                </a>
-                            </td>
-                            <td>@summary.AccountType</td>
-                            <td class="text-end">
-                                @if (summary.IsLiability)
+            @if (filteredCount == 0)
+            {
+                <div class="alert alert-secondary">No accounts match the current filters.</div>
+            }
+            else
+            {
+                <div class="fd-section-surface fd-table-surface fd-fade-in">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle fd-dashboard-table" role="grid">
+                            <thead>
+                                <tr>
+                                    <th>
+                                        <a class="fd-table-sort" @onclick="() => UpdateSortBy(SortColumn.AccountName)"
+                                           role="button"
+                                           tabindex="0"
+                                           @onkeydown="(KeyboardEventArgs e) => HandleSortKeydown(e, SortColumn.AccountName)"
+                                           aria-sort="@GetAriaSort(SortColumn.AccountName)">
+                                            Account @(currentSort == SortColumn.AccountName ? (sortAscending ? "▲" : "▼") : "")
+                                        </a>
+                                    </th>
+                                    <th>
+                                        <a class="fd-table-sort" @onclick="@(() => UpdateSortBy(SortColumn.AccountType))"
+                                           role="button"
+                                           tabindex="0"
+                                           @onkeydown="(KeyboardEventArgs e) => HandleSortKeydown(e, SortColumn.AccountType)"
+                                           aria-sort="@GetAriaSort(SortColumn.AccountType)">
+                                            Type @(currentSort == SortColumn.AccountType ? (sortAscending ? "▲" : "▼") : "")
+                                        </a>
+                                    </th>
+                                    <th class="text-end">
+                                        <a class="fd-table-sort" @onclick="() => UpdateSortBy(SortColumn.CurrentPosition)"
+                                           role="button"
+                                           tabindex="0"
+                                           @onkeydown="(KeyboardEventArgs e) => HandleSortKeydown(e, SortColumn.CurrentPosition)"
+                                           aria-sort="@GetAriaSort(SortColumn.CurrentPosition)">
+                                            Current Position @(currentSort == SortColumn.CurrentPosition ? (sortAscending ? "▲" : "▼") : "")
+                                        </a>
+                                    </th>
+                                    <th class="text-end">
+                                        <a class="fd-table-sort" @onclick="@(() => UpdateSortBy(SortColumn.PreviousMonthIncome))"
+                                           role="button"
+                                           tabindex="0"
+                                           @onkeydown="(KeyboardEventArgs e) => HandleSortKeydown(e, SortColumn.PreviousMonthIncome)"
+                                           aria-sort="@GetAriaSort(SortColumn.PreviousMonthIncome)">
+                                            Prev Month Income @(currentSort == SortColumn.PreviousMonthIncome ? (sortAscending ? "▲" : "▼") : "")
+                                        </a>
+                                    </th>
+                                    <th class="text-end">
+                                        <a class="fd-table-sort" @onclick="@(() => UpdateSortBy(SortColumn.PreviousMonthExpenses))"
+                                           role="button"
+                                           tabindex="0"
+                                           @onkeydown="(KeyboardEventArgs e) => HandleSortKeydown(e, SortColumn.PreviousMonthExpenses)"
+                                           aria-sort="@GetAriaSort(SortColumn.PreviousMonthExpenses)">
+                                            Prev Month Expenses @(currentSort == SortColumn.PreviousMonthExpenses ? (sortAscending ? "▲" : "▼") : "")
+                                        </a>
+                                    </th>
+                                    <th class="text-end">
+                                        <a class="fd-table-sort" @onclick="() => UpdateSortBy(SortColumn.PreviousMonthNet)"
+                                           role="button"
+                                           tabindex="0"
+                                           @onkeydown="(KeyboardEventArgs e) => HandleSortKeydown(e, SortColumn.PreviousMonthNet)"
+                                           aria-sort="@GetAriaSort(SortColumn.PreviousMonthNet)">
+                                            Prev Month Net @(currentSort == SortColumn.PreviousMonthNet ? (sortAscending ? "▲" : "▼") : "")
+                                        </a>
+                                    </th>
+                                    <th>
+                                        <a class="fd-table-sort" @onclick="() => UpdateSortBy(SortColumn.LastTransaction)"
+                                           role="button"
+                                           tabindex="0"
+                                           @onkeydown="(KeyboardEventArgs e) => HandleSortKeydown(e, SortColumn.LastTransaction)"
+                                           aria-sort="@GetAriaSort(SortColumn.LastTransaction)">
+                                            Last Transaction @(currentSort == SortColumn.LastTransaction ? (sortAscending ? "▲" : "▼") : "")
+                                        </a>
+                                    </th>
+                                    <th class="text-center">Transactions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var summary in GetFilteredAndSortedSummaries())
                                 {
-                                    <span class="badge bg-danger">@FormatCurrency(summary.CurrentPosition) owing</span>
+                                    <tr class="fd-account-row" @onclick="() => NavigateToAccount(summary.AccountId)" role="button" tabindex="0" @onkeydown="e => HandleKeyDown(e, summary.AccountId)">
+                                        <td>
+                                            <div class="fd-account-name">
+                                                <a href="/accounts/@summary.AccountId/transactions" class="fd-table-primary-link">
+                                                    @summary.AccountName
+                                                </a>
+                                                <div class="fd-account-name__meta">
+                                                    @(summary.IsActive ? "Active account" : "Inactive account") · @(summary.TransactionCount == 0 ? "No transactions yet" : $"{summary.TransactionCount} transaction(s)")
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td><span class="@GetAccountTypeChipClass(summary.AccountType)">@summary.AccountType</span></td>
+                                        <td class="text-end">
+                                            @if (summary.IsLiability)
+                                            {
+                                                <span class="fd-status-chip fd-status-chip--negative">@FormatCurrency(summary.CurrentPosition) owing</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="fd-value--positive">@FormatCurrency(summary.CurrentPosition)</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            @if (summary.TransactionCount == 0)
+                                            {
+                                                <span class="fd-data-unavailable">—</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="fd-value--positive">@FormatPreviousMonthValue(summary.PreviousMonthIncome, summary.TransactionCount)</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            @if (summary.TransactionCount == 0)
+                                            {
+                                                <span class="fd-data-unavailable">—</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="fd-value--negative">@FormatPreviousMonthValue(summary.PreviousMonthExpenses, summary.TransactionCount)</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            @if (summary.PreviousMonthTransactionCount == 0)
+                                            {
+                                                <span class="fd-data-unavailable">—</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="fw-bold @GetSignedValueClass(summary.PreviousMonthNet)">@FormatCurrency(summary.PreviousMonthNet)</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (summary.LastTransactionDate.HasValue)
+                                            {
+                                                <div class="fd-transaction-date">
+                                                    <div class="fd-transaction-date__title">@FormatDate(summary.LastTransactionDate)</div>
+                                                    <div class="fd-transaction-date__meta">Most recent transaction</div>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="fd-data-unavailable">—</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="fd-status-chip fd-status-chip--muted">@summary.TransactionCount</span>
+                                        </td>
+                                    </tr>
                                 }
-                                else
-                                {
-                                    <span>@FormatCurrency(summary.CurrentPosition)</span>
-                                }
-                            </td>
-                            <td class="text-end">@FormatPreviousMonthValue(summary.PreviousMonthIncome, summary.TransactionCount)</td>
-                            <td class="text-end">@FormatPreviousMonthValue(summary.PreviousMonthExpenses, summary.TransactionCount)</td>
-                            <td class="text-end">
-                                @if (summary.PreviousMonthTransactionCount == 0)
-                                {
-                                    <span class="text-muted">—</span>
-                                }
-                                else if (summary.PreviousMonthNet >= 0)
-                                {
-                                    <span class="text-success fw-bold">@FormatCurrency(summary.PreviousMonthNet)</span>
-                                }
-                                else
-                                {
-                                    <span class="text-danger fw-bold">@FormatCurrency(summary.PreviousMonthNet)</span>
-                                }
-                            </td>
-                            <td>@FormatDate(summary.LastTransactionDate)</td>
-                            <td class="text-center">@summary.TransactionCount</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
         }
     }
 }
 
-<style>
-    .account-row {
-        cursor: pointer;
-        transition: background-color 0.2s ease;
-    }
-
-    .account-row:hover {
-        background-color: #f8f9fa;
-    }
-
-    .account-row:focus {
-        outline: 2px solid #0d6efd;
-        outline-offset: -2px;
-        background-color: #e7f1ff;
-    }
-
-    .account-link {
-        text-decoration: none;
-        color: inherit;
-        font-weight: 500;
-    }
-
-    .account-link:hover,
-    .account-link:focus {
-        text-decoration: underline;
-        color: #0d6efd;
-    }
-
-    .account-link:focus {
-        outline: 2px solid #0d6efd;
-        border-radius: 0.25rem;
-    }
-
-    th a {
-        color: inherit;
-        text-decoration: none;
-    }
-
-    th a:hover {
-        text-decoration: underline;
-        color: #0d6efd;
-    }
-
-    th a:focus {
-        outline: 2px solid #0d6efd;
-        border-radius: 0.25rem;
-    }
-
-    /* Make table more compact and readable */
-    .table {
-        font-size: 0.95rem;
-    }
-
-    .table thead th {
-        background-color: #f8f9fa;
-        border-bottom: 2px solid #dee2e6;
-        font-weight: 600;
-        white-space: nowrap;
-    }
-
-    .table td:where(.text-end) {
-        min-width: 100px;
-    }
-
-    /* Ensure badges don't wrap */
-    .badge {
-        white-space: nowrap;
-    }
-</style>
 
 @code {
+    private const int MaxTrendAccounts = 4;
+    private const int MaxActivityAccounts = 6;
+    private const int MaxHistoryPoints = 120;
+
     private enum SortColumn
     {
         AccountName,
@@ -297,11 +487,24 @@ else
     private DashboardSummaryModel summary = new(0m, 0m, 0m, 0m);
     private List<AccountDashboardSummaryModel> accountSummaries = [];
     private bool isLoading = true;
+    private bool isVisualsLoading = true;
     private string? loadError;
     private SortColumn currentSort = SortColumn.AccountName;
     private bool sortAscending = true;
 
-    // Filter fields
+    private IReadOnlyList<DashboardNetPositionChartPointModel> netPositionHistory = [];
+    private IReadOnlyList<DashboardAccountTrendChartPointModel> accountTrendPoints = [];
+    private IReadOnlyList<DashboardActivityChartPointModel> previousMonthActivityPoints = [];
+    private IReadOnlyList<AccountDashboardSummaryModel> trendAccounts = [];
+    private Dictionary<Guid, IReadOnlyList<BalancePointModel>> accountBalanceHistories = new();
+    private DateOnly? latestObservedHistoryDate;
+
+    private readonly SeriesStroke netPositionSeriesStroke = new() { Width = 3, DashSpace = 0, Color = "#1d4ed8" };
+    private readonly SeriesStroke accountTrendSeriesStroke = new() { Width = 2, DashSpace = 0 };
+    private ApexChartOptions<DashboardNetPositionChartPointModel> netPositionChartOptions = new();
+    private ApexChartOptions<DashboardActivityChartPointModel> previousMonthActivityChartOptions = new();
+    private ApexChartOptions<DashboardAccountTrendChartPointModel> accountTrendChartOptions = new();
+
     private string filterAccountName = "";
     private string filterAccountType = "";
     private bool filterWithActivityOnly = false;
@@ -309,19 +512,29 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        ConfigureCharts();
         await LoadDashboardAsync();
     }
 
     private async Task LoadDashboardAsync()
     {
         isLoading = true;
+        isVisualsLoading = true;
         loadError = null;
 
         try
         {
-            summary = await ApiClient.GetDashboardSummaryAsync();
-            accountSummaries = (await ApiClient.GetAccountSummariesAsync()).ToList();
+            var summaryTask = ApiClient.GetDashboardSummaryAsync();
+            var accountSummariesTask = ApiClient.GetAccountSummariesAsync();
+
+            summary = await summaryTask;
+            accountSummaries = (await accountSummariesTask).ToList();
             UpdateFilteredCount();
+
+            isLoading = false;
+            await InvokeAsync(StateHasChanged);
+
+            await LoadDashboardVisualsAsync();
         }
         catch (Exception ex)
         {
@@ -330,7 +543,232 @@ else
         finally
         {
             isLoading = false;
+            isVisualsLoading = false;
         }
+    }
+
+    private async Task LoadDashboardVisualsAsync()
+    {
+        previousMonthActivityPoints = BuildPreviousMonthActivityPoints();
+
+        var accountsWithObservedHistory = accountSummaries
+            .Where(summary => summary.TransactionCount > 0)
+            .ToList();
+
+        if (accountsWithObservedHistory.Count == 0)
+        {
+            accountBalanceHistories.Clear();
+            netPositionHistory = [];
+            accountTrendPoints = [];
+            trendAccounts = [];
+            latestObservedHistoryDate = null;
+            return;
+        }
+
+        var historyResults = await Task.WhenAll(accountsWithObservedHistory.Select(async summary => new
+        {
+            Summary = summary,
+            Points = (await ApiClient.GetBalanceHistoryAsync(summary.AccountId)).ToList()
+        }));
+
+        accountBalanceHistories = historyResults
+            .Where(result => result.Points.Count > 0)
+            .ToDictionary(
+                result => result.Summary.AccountId,
+                result => (IReadOnlyList<BalancePointModel>)result.Points);
+
+        var allObservedDates = accountBalanceHistories.Values
+            .SelectMany(points => points.Select(point => point.Date))
+            .Distinct()
+            .OrderBy(date => date)
+            .ToList();
+
+        latestObservedHistoryDate = allObservedDates.Count > 0
+            ? allObservedDates[^1]
+            : null;
+
+        netPositionHistory = BuildNetPositionHistory(accountsWithObservedHistory, allObservedDates);
+        trendAccounts = SelectTrendAccounts(accountsWithObservedHistory);
+        accountTrendPoints = BuildAccountTrendPoints(trendAccounts);
+    }
+
+    private IReadOnlyList<DashboardNetPositionChartPointModel> BuildNetPositionHistory(
+        IReadOnlyList<AccountDashboardSummaryModel> accountsWithObservedHistory,
+        IReadOnlyList<DateOnly> reportDates)
+    {
+        if (reportDates.Count == 0)
+        {
+            return [];
+        }
+
+        var points = new List<DashboardNetPositionChartPointModel>(reportDates.Count);
+
+        foreach (var reportDate in reportDates)
+        {
+            decimal netPosition = 0m;
+
+            foreach (var account in accountsWithObservedHistory)
+            {
+                if (!accountBalanceHistories.TryGetValue(account.AccountId, out var history))
+                {
+                    continue;
+                }
+
+                var latestObservedPoint = history.LastOrDefault(point => point.Date <= reportDate);
+                if (latestObservedPoint is null)
+                {
+                    continue;
+                }
+
+                netPosition += GetNetContribution(account, latestObservedPoint.Balance);
+            }
+
+            points.Add(new DashboardNetPositionChartPointModel(
+                reportDate.ToDateTime(TimeOnly.MinValue),
+                decimal.Round(netPosition, 2, MidpointRounding.AwayFromZero)));
+        }
+
+        return Downsample(points, MaxHistoryPoints);
+    }
+
+    private IReadOnlyList<AccountDashboardSummaryModel> SelectTrendAccounts(IReadOnlyList<AccountDashboardSummaryModel> accountsWithObservedHistory)
+    {
+        return accountsWithObservedHistory
+            .Where(summary => accountBalanceHistories.TryGetValue(summary.AccountId, out var history) && history.Count > 1)
+            .OrderByDescending(summary => Math.Abs(summary.CurrentPosition))
+            .Take(MaxTrendAccounts)
+            .ToList();
+    }
+
+    private IReadOnlyList<DashboardAccountTrendChartPointModel> BuildAccountTrendPoints(IReadOnlyList<AccountDashboardSummaryModel> selectedTrendAccounts)
+    {
+        var points = new List<DashboardAccountTrendChartPointModel>();
+
+        foreach (var account in selectedTrendAccounts)
+        {
+            if (!accountBalanceHistories.TryGetValue(account.AccountId, out var history))
+            {
+                continue;
+            }
+
+            foreach (var point in Downsample(history, MaxHistoryPoints))
+            {
+                points.Add(new DashboardAccountTrendChartPointModel(
+                    point.Date.ToDateTime(TimeOnly.MinValue),
+                    account.IsLiability ? Math.Abs(point.Balance) : point.Balance,
+                    GetTrendSeriesName(account)));
+            }
+        }
+
+        return points;
+    }
+
+    private IReadOnlyList<DashboardActivityChartPointModel> BuildPreviousMonthActivityPoints()
+    {
+        return accountSummaries
+            .Where(summary => summary.PreviousMonthTransactionCount > 0)
+            .OrderByDescending(summary => Math.Max(summary.PreviousMonthIncome, summary.PreviousMonthExpenses))
+            .ThenBy(summary => summary.AccountName)
+            .Take(MaxActivityAccounts)
+            .Select(summary => new DashboardActivityChartPointModel(
+                summary.AccountName,
+                summary.PreviousMonthIncome,
+                summary.PreviousMonthExpenses,
+                summary.PreviousMonthNet))
+            .ToList();
+    }
+
+    private bool HasNetPositionHistory => netPositionHistory.Count > 1;
+
+    private bool HasAccountTrendHistory => trendAccounts.Count > 0 && accountTrendPoints.Count > 1;
+
+    private bool HasPreviousMonthActivityChart => previousMonthActivityPoints.Count > 0;
+
+    private void ConfigureCharts()
+    {
+        netPositionChartOptions = new ApexChartOptions<DashboardNetPositionChartPointModel>
+        {
+            Chart = new Chart { Toolbar = new Toolbar { Show = false } },
+            DataLabels = new DataLabels { Enabled = false },
+            Markers = new Markers { Size = 0 },
+            Legend = new Legend { Show = false },
+            Tooltip = new Tooltip
+            {
+                Shared = true,
+                Intersect = false,
+                X = new TooltipX { Show = true }
+            },
+            Xaxis = new XAxis
+            {
+                Type = XAxisType.Datetime,
+                Title = new AxisTitle { Text = "Observed date" }
+            },
+            Yaxis = [new YAxis
+            {
+                Title = new AxisTitle { Text = "Net position" },
+                Labels = new YAxisLabels
+                {
+                    Formatter = "function(value) { return '$' + value.toLocaleString(); }"
+                }
+            }]
+        };
+
+        previousMonthActivityChartOptions = new ApexChartOptions<DashboardActivityChartPointModel>
+        {
+            Chart = new Chart { Toolbar = new Toolbar { Show = false } },
+            DataLabels = new DataLabels { Enabled = false },
+            Tooltip = new Tooltip
+            {
+                Shared = true,
+                Intersect = false
+            },
+            Legend = new Legend
+            {
+                Position = LegendPosition.Top
+            },
+            Xaxis = new XAxis
+            {
+                Title = new AxisTitle { Text = "Accounts" }
+            },
+            Yaxis = [new YAxis
+            {
+                Title = new AxisTitle { Text = "Amount" },
+                Labels = new YAxisLabels
+                {
+                    Formatter = "function(value) { return '$' + value.toLocaleString(); }"
+                }
+            }]
+        };
+
+        accountTrendChartOptions = new ApexChartOptions<DashboardAccountTrendChartPointModel>
+        {
+            Chart = new Chart { Toolbar = new Toolbar { Show = false } },
+            DataLabels = new DataLabels { Enabled = false },
+            Markers = new Markers { Size = 0 },
+            Tooltip = new Tooltip
+            {
+                Shared = true,
+                Intersect = false,
+                X = new TooltipX { Show = true }
+            },
+            Legend = new Legend
+            {
+                Position = LegendPosition.Top
+            },
+            Xaxis = new XAxis
+            {
+                Type = XAxisType.Datetime,
+                Title = new AxisTitle { Text = "Observed date" }
+            },
+            Yaxis = [new YAxis
+            {
+                Title = new AxisTitle { Text = "Observed balance" },
+                Labels = new YAxisLabels
+                {
+                    Formatter = "function(value) { return '$' + value.toLocaleString(); }"
+                }
+            }]
+        };
     }
 
     private void UpdateSortBy(SortColumn column)
@@ -348,23 +786,19 @@ else
 
     private decimal NormalizeLiabilityPosition(AccountDashboardSummaryModel summary)
     {
-        // For sorting liabilities: if IsLiability, negate the value so liabilities
-        // sort correctly (higher debt = lower sort value). This preserves semantics.
         return summary.IsLiability ? -summary.CurrentPosition : summary.CurrentPosition;
     }
 
     private IEnumerable<AccountDashboardSummaryModel> GetFilteredAndSortedSummaries()
     {
-        // Apply filters
         var filtered = accountSummaries
-            .Where(s => string.IsNullOrWhiteSpace(filterAccountName) || 
-                       s.AccountName.Contains(filterAccountName, StringComparison.OrdinalIgnoreCase))
-            .Where(s => string.IsNullOrWhiteSpace(filterAccountType) || 
-                       s.AccountType.Equals(filterAccountType, StringComparison.OrdinalIgnoreCase))
+            .Where(s => string.IsNullOrWhiteSpace(filterAccountName) ||
+                        s.AccountName.Contains(filterAccountName, StringComparison.OrdinalIgnoreCase))
+            .Where(s => string.IsNullOrWhiteSpace(filterAccountType) ||
+                        s.AccountType.Equals(filterAccountType, StringComparison.OrdinalIgnoreCase))
             .Where(s => !filterWithActivityOnly || s.PreviousMonthTransactionCount > 0)
             .ToList();
 
-        // Apply sorting with deterministic secondary ordering by AccountName
         return currentSort switch
         {
             SortColumn.AccountName =>
@@ -426,7 +860,6 @@ else
 
     private void NavigateToAccount(Guid accountId)
     {
-        // Navigate to the account transactions detail view
         Navigation.NavigateTo($"/accounts/{accountId}/transactions");
     }
 
@@ -449,9 +882,101 @@ else
     private string GetAriaSort(SortColumn column)
     {
         if (currentSort != column)
+        {
             return "none";
+        }
 
         return sortAscending ? "ascending" : "descending";
+    }
+
+    private static decimal GetNetContribution(AccountDashboardSummaryModel summary, decimal rawBalance)
+    {
+        return summary.IsLiability
+            ? -Math.Abs(rawBalance)
+            : rawBalance;
+    }
+
+    private static string GetTrendSeriesName(AccountDashboardSummaryModel summary)
+    {
+        return summary.IsLiability
+            ? $"{summary.AccountName} (owing)"
+            : summary.AccountName;
+    }
+
+    private static IReadOnlyList<T> Downsample<T>(IReadOnlyList<T> items, int maxPoints)
+    {
+        if (items.Count <= maxPoints)
+        {
+            return items;
+        }
+
+        var step = (int)Math.Ceiling(items.Count / (double)maxPoints);
+        var sampled = items
+            .Where((_, index) => index % step == 0)
+            .ToList();
+
+        if (!EqualityComparer<T>.Default.Equals(sampled[^1], items[^1]))
+        {
+            sampled.Add(items[^1]);
+        }
+
+        return sampled;
+    }
+
+    private IEnumerable<DashboardAccountTrendChartPointModel> GetTrendSeriesPoints(string seriesName)
+    {
+        return accountTrendPoints.Where(point => point.AccountName == seriesName);
+    }
+
+    private decimal GetSignedTotalByType(params string[] accountTypes)
+    {
+        return accountSummaries
+            .Where(summary => accountTypes.Contains(summary.AccountType, StringComparer.OrdinalIgnoreCase))
+            .Sum(summary => summary.IsLiability ? -Math.Abs(summary.CurrentPosition) : summary.CurrentPosition);
+    }
+
+    private int GetAccountTypeCount(params string[] accountTypes)
+    {
+        return accountSummaries.Count(summary => summary.IsActive && accountTypes.Contains(summary.AccountType, StringComparer.OrdinalIgnoreCase));
+    }
+
+    private string GetTypeCountSupportingText(string accountType, string label)
+    {
+        var count = GetAccountTypeCount(accountType);
+        return count == 0
+            ? $"No active {label} accounts yet."
+            : $"{count} active {label} account(s).";
+    }
+
+    private string GetNetPositionSupportingText()
+    {
+        var activeAccountCount = accountSummaries.Count(summary => summary.IsActive);
+        var accountText = activeAccountCount == 1
+            ? "1 active account tracked"
+            : $"{activeAccountCount} active accounts tracked";
+
+        return latestObservedHistoryDate.HasValue
+            ? $"{accountText} · observed through {latestObservedHistoryDate.Value:dd MMM yyyy}"
+            : accountText;
+    }
+
+    private string GetCashSupportingText()
+    {
+        var monthlyNet = accountSummaries
+            .Where(summary => summary.IsActive && summary.AccountType is "Transaction" or "Savings")
+            .Sum(summary => summary.PreviousMonthNet);
+
+        return accountSummaries.Any(summary => summary.IsActive && summary.AccountType is "Transaction" or "Savings")
+            ? $"Last completed month: {FormatCurrency(monthlyNet)} net."
+            : "Transaction and savings balances only.";
+    }
+
+    private string GetLiabilitySupportingText(string accountType, string label)
+    {
+        var count = GetAccountTypeCount(accountType);
+        return count == 0
+            ? $"No active {label} accounts yet."
+            : $"{count} active {label} account(s) owing.";
     }
 
     private static string FormatCurrency(decimal amount)
@@ -459,20 +984,43 @@ else
         return amount.ToString("C");
     }
 
+    private static string GetSignedValueClass(decimal amount)
+    {
+        if (amount > 0)
+        {
+            return "fd-value--positive";
+        }
+
+        if (amount < 0)
+        {
+            return "fd-value--negative";
+        }
+
+        return "fd-value--strong";
+    }
+
+    private static string GetAccountTypeChipClass(string accountType)
+    {
+        return accountType switch
+        {
+            "Mortgage" or "CreditCard" => "fd-status-chip fd-status-chip--negative",
+            "Savings" or "Investment" => "fd-status-chip fd-status-chip--positive",
+            _ => "fd-status-chip fd-status-chip--muted"
+        };
+    }
+
     private static string FormatPreviousMonthValue(decimal amount, int totalTransactionCount)
     {
-        // If there are no transactions at all, show a dash
         if (totalTransactionCount == 0)
         {
             return "—";
         }
 
-        // Otherwise format as currency (may be 0 if no activity in previous month)
         return amount.ToString("C");
     }
 
     private static string FormatDate(DateOnly? date)
     {
-        return date.HasValue ? date.Value.ToString("dd/MM/yyyy") : "-";
+        return date.HasValue ? date.Value.ToString("dd MMM yyyy") : "—";
     }
 }

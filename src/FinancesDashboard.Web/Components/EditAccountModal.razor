@@ -1,10 +1,13 @@
 @if (IsVisible)
 {
-    <div class="modal d-block" style="background-color: rgba(0,0,0,0.5);" role="dialog">
-        <div class="modal-dialog" role="document">
+    <div class="modal d-block fd-modal-backdrop" role="dialog">
+        <div class="modal-dialog modal-dialog-centered" role="document">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Edit Account</h5>
+                    <div>
+                        <h5 class="modal-title">Edit Account</h5>
+                        <div class="text-muted small">Update the account details used across the dashboard.</div>
+                    </div>
                     <button type="button" class="btn-close" @onclick="OnCancel"></button>
                 </div>
                 <div class="modal-body">
@@ -19,13 +22,13 @@
                             <input id="edit-name" class="form-control" @bind="EditName" />
                         </div>
 
-                        <div class="mb-3 form-check">
+                        <div class="mb-4 form-check">
                             <input id="edit-active" type="checkbox" class="form-check-input" @bind="EditIsActive" />
                             <label class="form-check-label" for="edit-active">Active</label>
                         </div>
                     </form>
 
-                    <div class="alert alert-warning">
+                    <div class="alert alert-warning mb-0">
                         <strong>Danger Zone:</strong> Delete this account permanently.
                     </div>
                 </div>
@@ -33,7 +36,7 @@
                     <button type="button" class="btn btn-danger me-auto" @onclick="OnDelete" disabled="@IsDeleting">
                         @(IsDeleting ? "Deleting..." : "Delete Account")
                     </button>
-                    <button type="button" class="btn btn-secondary" @onclick="OnCancel">Cancel</button>
+                    <button type="button" class="btn btn-outline-secondary" @onclick="OnCancel">Cancel</button>
                     <button type="button" class="btn btn-primary" @onclick="OnSave" disabled="@IsLoading">
                         @(IsLoading ? "Saving..." : "Save Changes")
                     </button>
