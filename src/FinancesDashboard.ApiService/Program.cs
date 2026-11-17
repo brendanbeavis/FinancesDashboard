@@ -6,6 +6,7 @@ using FinancesDashboard.Application.Services;
 using FinancesDashboard.Domain.Enums;
 using FinancesDashboard.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,9 +15,18 @@ builder.AddServiceDefaults();
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 
+var configuredConnectionString = builder.Configuration.GetConnectionString("financesdb");
+var defaultConnectionString = builder.Environment.IsDevelopment()
+    ? "Data Source=financesdashboard.db"
+    : "Data Source=/data/financereport.db";
+var connectionString = string.IsNullOrWhiteSpace(configuredConnectionString)
+    ? defaultConnectionString
+    : configuredConnectionString;
+
+EnsureSqliteDirectoryExists(connectionString);
+
 builder.Services.AddDbContext<FinancesDashboardDbContext>(options =>
 {
-    var connectionString = builder.Configuration.GetConnectionString("financesdb") ?? "Data Source=financesdashboard.db";
     options.UseSqlite(connectionString);
 });
 
@@ -39,6 +49,11 @@ builder.Services.AddScoped<MortgageAmortizationForecastService>();
 builder.Services.AddScoped<CbaCsvImporter>();
 builder.Services.AddScoped<ColesCreditCardCsvImporter>();
 builder.Services.AddScoped<AccountApplicationService>();
+builder.Services.AddScoped<InvestmentApplicationService>();
+builder.Services.AddScoped<InvestmentPortfolioImportService>();
+builder.Services.AddScoped<InvestmentPortfolioService>();
+builder.Services.AddScoped<PortfolioValuationService>();
+builder.Services.AddScoped<PortfolioPerformanceService>();
 builder.Services.AddScoped<CreditCardPositionService>();
 builder.Services.AddScoped<DashboardApplicationService>();
 builder.Services.AddScoped<MortgageApplicationService>();
@@ -252,6 +267,191 @@ app.MapPost("/api/import/coles/{accountId:guid}", async (
     return Results.Ok(result);
 })
 .DisableAntiforgery();
+
+app.MapGet("/api/investments/accounts", async (InvestmentApplicationService service, CancellationToken cancellationToken) =>
+{
+    var accounts = await service.GetInvestmentAccountsAsync(cancellationToken);
+    return Results.Ok(accounts);
+});
+
+app.MapPost("/api/investments/accounts", async (
+    [FromBody] CreateInvestmentAccountRequest? request,
+    InvestmentApplicationService service,
+    CancellationToken cancellationToken) =>
+{
+    if (request is null)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["request"] = ["Request body is required."]
+        });
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Name))
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["name"] = ["Name is required."]
+        });
+    }
+
+    var created = await service.CreateInvestmentAccountAsync(request, cancellationToken);
+    return Results.Created($"/api/investments/accounts/{created.Id}", created);
+});
+
+app.MapPut("/api/investments/accounts/{id:guid}", async (
+    Guid id,
+    [FromBody] UpdateInvestmentAccountRequest? request,
+    InvestmentApplicationService service,
+    CancellationToken cancellationToken) =>
+{
+    if (request is null)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["request"] = ["Request body is required."]
+        });
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Name))
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["name"] = ["Name is required."]
+        });
+    }
+
+    try
+    {
+        var updated = await service.UpdateInvestmentAccountAsync(id, request, cancellationToken);
+        return Results.Ok(updated);
+    }
+    catch (KeyNotFoundException)
+    {
+        return Results.NotFound();
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["account"] = [ex.Message]
+        });
+    }
+});
+
+app.MapGet("/api/investments/{accountId:guid}/summary", async (
+    Guid accountId,
+    InvestmentApplicationService service,
+    CancellationToken cancellationToken) =>
+{
+    var summary = await service.GetPortfolioSummaryAsync(accountId, cancellationToken);
+    return summary is null ? Results.NotFound() : Results.Ok(summary);
+});
+
+app.MapGet("/api/investments/{accountId:guid}/holdings", async (
+    Guid accountId,
+    InvestmentApplicationService service,
+    CancellationToken cancellationToken) =>
+{
+    var holdings = await service.GetHoldingsAsync(accountId, cancellationToken);
+    return Results.Ok(holdings);
+});
+
+app.MapGet("/api/investments/{accountId:guid}/holdings/{instrumentCode}", async (
+    Guid accountId,
+    string instrumentCode,
+    InvestmentApplicationService service,
+    CancellationToken cancellationToken) =>
+{
+    var holding = await service.GetHoldingByCodeAsync(accountId, instrumentCode, cancellationToken);
+    return holding is null ? Results.NotFound() : Results.Ok(holding);
+});
+
+app.MapGet("/api/investments/{accountId:guid}/snapshots", async (
+    Guid accountId,
+    InvestmentApplicationService service,
+    CancellationToken cancellationToken) =>
+{
+    var snapshots = await service.GetSnapshotsAsync(accountId, cancellationToken);
+    return Results.Ok(snapshots);
+});
+
+app.MapGet("/api/investments/{accountId:guid}/imports", async (
+    Guid accountId,
+    InvestmentApplicationService service,
+    CancellationToken cancellationToken) =>
+{
+    var imports = await service.GetImportHistoryAsync(accountId, cancellationToken);
+    return Results.Ok(imports);
+});
+
+app.MapPost("/api/investments/{accountId:guid}/import/preview", async (
+    Guid accountId,
+    IFormFile? file,
+    [FromQuery] decimal? tolerance,
+    InvestmentPortfolioImportService importService,
+    CancellationToken cancellationToken) =>
+{
+    if (file is null || file.Length == 0)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["file"] = ["A non-empty CSV file is required."]
+        });
+    }
+
+    await using var stream = file.OpenReadStream();
+    var preview = await importService.PreviewImportAsync(accountId, stream, file.FileName, tolerance ?? 0.05m, cancellationToken);
+    return Results.Ok(preview);
+})
+.DisableAntiforgery();
+
+app.MapPost("/api/investments/{accountId:guid}/import/confirm", async (
+    Guid accountId,
+    [FromBody] ConfirmInvestmentImportRequest? request,
+    InvestmentPortfolioImportService importService,
+    CancellationToken cancellationToken) =>
+{
+    if (request is null)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["request"] = ["Request body is required."]
+        });
+    }
+
+    if (request.InvestmentAccountId != accountId)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["investmentAccountId"] = ["Body account id must match route account id."]
+        });
+    }
+
+    try
+    {
+        var result = await importService.ConfirmImportAsync(request, cancellationToken);
+        return Results.Ok(result);
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["import"] = [ex.Message]
+        });
+    }
+    catch (KeyNotFoundException)
+    {
+        return Results.NotFound();
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["account"] = [ex.Message]
+        });
+    }
+});
 
 app.MapGet("/api/dashboard/summary", async (DashboardApplicationService service, CancellationToken cancellationToken) =>
 {
@@ -539,5 +739,22 @@ app.MapGet("/api/mortgages/{accountId}/current-balance", async (
 
 app.MapDefaultEndpoints();
 app.Run();
+
+static void EnsureSqliteDirectoryExists(string sqliteConnectionString)
+{
+    var connectionStringBuilder = new SqliteConnectionStringBuilder(sqliteConnectionString);
+    if (string.IsNullOrWhiteSpace(connectionStringBuilder.DataSource) || connectionStringBuilder.Mode == SqliteOpenMode.Memory)
+    {
+        return;
+    }
+
+    var fullPath = Path.GetFullPath(connectionStringBuilder.DataSource);
+    var directory = Path.GetDirectoryName(fullPath);
+
+    if (!string.IsNullOrWhiteSpace(directory))
+    {
+        Directory.CreateDirectory(directory);
+    }
+}
 
 public partial class Program;

@@ -23,6 +23,21 @@ namespace FinancesDashboard.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("AccountNumber")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IncludeInNetWorth")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER");
 
@@ -30,10 +45,19 @@ namespace FinancesDashboard.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Provider")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Type")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("Type");
 
                     b.ToTable("Accounts", (string)null);
                 });
@@ -68,6 +92,68 @@ namespace FinancesDashboard.Infrastructure.Migrations
                     b.ToTable("AccountGroupMembers", (string)null);
                 });
 
+            modelBuilder.Entity("FinancesDashboard.Domain.Models.HoldingSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("AverageCostPerUnit")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("DailyPriceChange")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("DailyPriceChangePercentage")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("InvestmentInstrumentId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("MarketPrice")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("MarketValue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PortfolioSnapshotId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("PortfolioWeightPercentage")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TotalCostBase")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Units")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("UnrealisedProfitLoss")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("UnrealisedProfitLossPercentage")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvestmentInstrumentId");
+
+                    b.HasIndex("PortfolioSnapshotId", "InvestmentInstrumentId")
+                        .IsUnique();
+
+                    b.ToTable("HoldingSnapshots", (string)null);
+                });
+
             modelBuilder.Entity("FinancesDashboard.Domain.Models.InterestRatePeriod", b =>
                 {
                     b.Property<Guid>("MortgageId")
@@ -86,6 +172,45 @@ namespace FinancesDashboard.Infrastructure.Migrations
                     b.HasKey("MortgageId", "StartDate");
 
                     b.ToTable("InterestRatePeriods", (string)null);
+                });
+
+            modelBuilder.Entity("FinancesDashboard.Domain.Models.InvestmentInstrument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Exchange")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("InstrumentType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Exchange", "Code")
+                        .IsUnique();
+
+                    b.ToTable("InvestmentInstruments", (string)null);
                 });
 
             modelBuilder.Entity("FinancesDashboard.Domain.Models.Mortgage", b =>
@@ -128,6 +253,214 @@ namespace FinancesDashboard.Infrastructure.Migrations
                     b.HasIndex("OffsetAccountId");
 
                     b.ToTable("MortgageOffsetAccounts", (string)null);
+                });
+
+            modelBuilder.Entity("FinancesDashboard.Domain.Models.PortfolioHolding", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("AverageCostPerUnit")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("CurrentMarketValue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("CurrentPrice")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("InvestmentAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("InvestmentInstrumentId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsClosed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("LastUpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TotalCostBase")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Units")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("UnrealisedProfitLoss")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("UnrealisedProfitLossPercentage")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvestmentAccountId");
+
+                    b.HasIndex("InvestmentInstrumentId");
+
+                    b.HasIndex("InvestmentAccountId", "InvestmentInstrumentId")
+                        .IsUnique();
+
+                    b.ToTable("PortfolioHoldings", (string)null);
+                });
+
+            modelBuilder.Entity("FinancesDashboard.Domain.Models.PortfolioImportBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ErrorSummary")
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("FailedRows")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FileHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ImportDateTime")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ImportStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("InvestmentAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("SnapshotDateTime")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SuccessfulRows")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("TotalCostBase")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TotalMarketValue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TotalRowsRead")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvestmentAccountId", "FileHash")
+                        .IsUnique();
+
+                    b.HasIndex("InvestmentAccountId", "SnapshotDateTime");
+
+                    b.ToTable("PortfolioImportBatches", (string)null);
+                });
+
+            modelBuilder.Entity("FinancesDashboard.Domain.Models.PortfolioImportIssue", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ErrorMessage")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InstrumentCode")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PortfolioImportBatchId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RawRow")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("RowNumber")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PortfolioImportBatchId");
+
+                    b.ToTable("PortfolioImportIssues", (string)null);
+                });
+
+            modelBuilder.Entity("FinancesDashboard.Domain.Models.PortfolioSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("InvestmentAccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("SnapshotDateTime")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TotalCostBase")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TotalDailyValueChange")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TotalMarketValue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TotalUnrealisedProfitLoss")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TotalUnrealisedProfitLossPercentage")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvestmentAccountId", "SnapshotDateTime")
+                        .IsUnique();
+
+                    b.ToTable("PortfolioSnapshots", (string)null);
                 });
 
             modelBuilder.Entity("FinancesDashboard.Domain.Models.Transaction", b =>
@@ -190,6 +523,21 @@ namespace FinancesDashboard.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("FinancesDashboard.Domain.Models.HoldingSnapshot", b =>
+                {
+                    b.HasOne("FinancesDashboard.Domain.Models.InvestmentInstrument", null)
+                        .WithMany()
+                        .HasForeignKey("InvestmentInstrumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FinancesDashboard.Domain.Models.PortfolioSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("PortfolioSnapshotId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("FinancesDashboard.Domain.Models.InterestRatePeriod", b =>
                 {
                     b.HasOne("FinancesDashboard.Domain.Models.Mortgage", null)
@@ -220,6 +568,48 @@ namespace FinancesDashboard.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("OffsetAccountId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FinancesDashboard.Domain.Models.PortfolioHolding", b =>
+                {
+                    b.HasOne("FinancesDashboard.Domain.Models.Account", null)
+                        .WithMany()
+                        .HasForeignKey("InvestmentAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("FinancesDashboard.Domain.Models.InvestmentInstrument", null)
+                        .WithMany()
+                        .HasForeignKey("InvestmentInstrumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FinancesDashboard.Domain.Models.PortfolioImportBatch", b =>
+                {
+                    b.HasOne("FinancesDashboard.Domain.Models.Account", null)
+                        .WithMany()
+                        .HasForeignKey("InvestmentAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FinancesDashboard.Domain.Models.PortfolioImportIssue", b =>
+                {
+                    b.HasOne("FinancesDashboard.Domain.Models.PortfolioImportBatch", null)
+                        .WithMany()
+                        .HasForeignKey("PortfolioImportBatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FinancesDashboard.Domain.Models.PortfolioSnapshot", b =>
+                {
+                    b.HasOne("FinancesDashboard.Domain.Models.Account", null)
+                        .WithMany()
+                        .HasForeignKey("InvestmentAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

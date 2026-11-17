@@ -58,20 +58,26 @@ else
 
             <div class="col-12 col-xxl-5">
                 <div class="row g-3 fd-dashboard-support-grid">
-                    <div class="col-6 col-lg-4 col-xxl-12">
+                    <div class="col-6 col-lg-6 col-xxl-12">
                         <MetricCard Label="Cash &amp; Savings"
                                     Value="@FormatCurrency(summary.CurrentCashPosition)"
                                     ValueClass="fd-value--positive"
                                     SupportingText="@GetCashSupportingText()" />
                     </div>
-                    <div class="col-6 col-lg-4 col-xxl-12">
+                    <div class="col-6 col-lg-6 col-xxl-12">
+                        <MetricCard Label="Investments"
+                                    Value="@FormatCurrency(summary.CurrentInvestmentPosition)"
+                                    ValueClass="@GetSignedValueClass(summary.CurrentInvestmentPosition)"
+                                    SupportingText="@(summary.LatestInvestmentSnapshotDateTime.HasValue ? $"Snapshot {summary.LatestInvestmentSnapshotDateTime.Value:dd MMM yyyy}" : "No snapshot imported")" />
+                    </div>
+                    <div class="col-6 col-lg-6 col-xxl-12">
                         <MetricCard Label="Credit Card Liabilities"
                                     Value="@FormatCurrency(summary.CurrentCreditCardPosition)"
                                     ValueClass="fd-value--negative"
                                     SupportingText="@GetLiabilitySupportingText("CreditCard", "credit card")"
                                     AccentClass="fd-metric-card--danger" />
                     </div>
-                    <div class="col-12 col-lg-4 col-xxl-12">
+                    <div class="col-6 col-lg-6 col-xxl-12">
                         <MetricCard Label="Mortgage Debt"
                                     Value="@FormatCurrency(Math.Abs(summary.CurrentMortgagePosition))"
                                     ValueClass="fd-value--negative"
@@ -484,7 +490,7 @@ else
         LastTransaction
     }
 
-    private DashboardSummaryModel summary = new(0m, 0m, 0m, 0m);
+    private DashboardSummaryModel summary = new(0m, 0m, 0m, 0m, 0m, null);
     private List<AccountDashboardSummaryModel> accountSummaries = [];
     private bool isLoading = true;
     private bool isVisualsLoading = true;

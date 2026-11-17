@@ -11,4 +11,16 @@ public sealed class Account
     public AccountType Type { get; set; }
 
     public bool IsActive { get; set; }
+
+    public string? AccountNumber { get; set; }
+
+    public string CurrencyCode { get; set; } = "AUD";
+
+    public string? Provider { get; set; }
+
+    public bool IncludeInNetWorth { get; set; } = true;
+
+    public DateTime CreatedAt { get; set; }
+
+    public DateTime UpdatedAt { get; set; }
 }

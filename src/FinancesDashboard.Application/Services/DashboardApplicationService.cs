@@ -24,7 +24,7 @@ public sealed class DashboardApplicationService(
         // Build net position: include all non-credit-card accounts via GetNetContribution,
         // then apply the credit card accrued balance (which will be negative for debt)
         var accountNetPosition = latestAccountBalances
-            .Where(item => item.Type != AccountType.CreditCard)
+            .Where(item => item.Type != AccountType.CreditCard && item.IncludeInNetWorth)
             .Sum(item => GetNetContribution(item.Type, item.Balance))
             + GetNetContribution(AccountType.CreditCard, creditCardAccruedBalance);
 
@@ -32,17 +32,27 @@ public sealed class DashboardApplicationService(
             .Where(item => item.Type is AccountType.Transaction or AccountType.Savings)
             .Sum(item => item.Balance);
 
-        // Mortgage position is included in the latestAccountBalances from GetLatestAccountBalancesAsync
-        // which already includes mortgage accounts with their latest BankBalance
         var currentMortgagePosition = latestAccountBalances
             .Where(item => item.Type == AccountType.Mortgage)
             .Sum(item => -Math.Abs(item.Balance));
+
+        var currentInvestmentPosition = latestAccountBalances
+            .Where(item => item.Type == AccountType.Investment)
+            .Sum(item => item.Balance);
+
+        var latestInvestmentSnapshotDateTime = await dbContext.PortfolioSnapshots
+            .AsNoTracking()
+            .OrderByDescending(snapshot => snapshot.SnapshotDateTime)
+            .Select(snapshot => (DateTime?)snapshot.SnapshotDateTime)
+            .FirstOrDefaultAsync(cancellationToken);
 
         return new DashboardSummary(
             accountNetPosition,
             currentCashPosition,
             currentCreditCardPosition,
-            currentMortgagePosition);
+            currentMortgagePosition,
+            currentInvestmentPosition,
+            latestInvestmentSnapshotDateTime);
     }
 
     public async Task<IReadOnlyList<BalancePoint>> GetBalanceAsync(Guid accountId, CancellationToken cancellationToken)
@@ -223,7 +233,6 @@ public sealed class DashboardApplicationService(
 
     public async Task<IReadOnlyList<AccountDashboardSummary>> GetAccountSummariesAsync(CancellationToken cancellationToken)
     {
-        // Get all active accounts
         var accounts = await dbContext.Accounts
             .AsNoTracking()
             .Where(a => a.IsActive)
@@ -237,13 +246,11 @@ public sealed class DashboardApplicationService(
 
         var summaries = new List<AccountDashboardSummary>(accounts.Count);
 
-        // Determine previous month date range
         var today = DateOnly.FromDateTime(DateTime.Today);
         var firstDayOfCurrentMonth = new DateOnly(today.Year, today.Month, 1);
         var lastDayOfPreviousMonth = firstDayOfCurrentMonth.AddDays(-1);
         var firstDayOfPreviousMonth = new DateOnly(lastDayOfPreviousMonth.Year, lastDayOfPreviousMonth.Month, 1);
 
-        // Get all transactions grouped by account to minimize database queries
         var transactionsByAccount = await dbContext.Transactions
             .AsNoTracking()
             .GroupBy(t => t.AccountId)
@@ -256,61 +263,86 @@ public sealed class DashboardApplicationService(
             })
             .ToDictionaryAsync(x => x.AccountId, cancellationToken);
 
+        var investmentAccountIds = accounts
+            .Where(account => account.Type == AccountType.Investment)
+            .Select(account => account.Id)
+            .ToList();
+
+        var latestInvestmentSnapshots = await dbContext.PortfolioSnapshots
+            .AsNoTracking()
+            .Where(snapshot => investmentAccountIds.Contains(snapshot.InvestmentAccountId))
+            .ToListAsync(cancellationToken);
+
+        var latestInvestmentSnapshotByAccount = latestInvestmentSnapshots
+            .GroupBy(snapshot => snapshot.InvestmentAccountId)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderByDescending(snapshot => snapshot.SnapshotDateTime)
+                    .ThenByDescending(snapshot => snapshot.CreatedAt)
+                    .First());
+
+        var openHoldingCountByAccount = await dbContext.PortfolioHoldings
+            .AsNoTracking()
+            .Where(holding => investmentAccountIds.Contains(holding.InvestmentAccountId) && !holding.IsClosed && holding.Units > 0m)
+            .GroupBy(holding => holding.InvestmentAccountId)
+            .Select(group => new { AccountId = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(item => item.AccountId, item => item.Count, cancellationToken);
+
         foreach (var account in accounts)
         {
-            var hasTransactions = transactionsByAccount.TryGetValue(account.Id, out var transactionData);
-
             decimal currentPosition = 0m;
             bool isLiability = false;
             DateOnly? lastTransactionDate = null;
             int transactionCount = 0;
-
-            if (hasTransactions && transactionData != null)
-            {
-                lastTransactionDate = transactionData.LatestTransaction.Date;
-                transactionCount = transactionData.AllTransactions.Count;
-
-                // Calculate current position based on account type
-                currentPosition = account.Type switch
-                {
-                    AccountType.CreditCard =>
-                        // Credit card: sum all amounts and take absolute value for "owing"
-                        Math.Abs(transactionData.AllTransactions.Sum(t => t.Amount)),
-
-                    AccountType.Mortgage =>
-                        // Mortgage: show as positive outstanding principal
-                        Math.Abs(transactionData.LatestTransaction.BankBalance),
-
-                    _ =>
-                        // Assets and other: use latest BankBalance as-is
-                        transactionData.LatestTransaction.BankBalance
-                };
-
-                // Determine if this is a liability (displayed as owing/owed)
-                isLiability = account.Type is AccountType.CreditCard or AccountType.Mortgage;
-            }
-
-            // Calculate previous month activity
             decimal previousMonthIncome = 0m;
             decimal previousMonthExpenses = 0m;
             int previousMonthTransactionCount = 0;
 
-            if (hasTransactions && transactionData?.PreviousMonthTransactions.Count > 0)
+            if (account.Type == AccountType.Investment)
             {
-                previousMonthIncome = transactionData.PreviousMonthTransactions
-                    .Where(t => t.Amount > 0m)
-                    .Sum(t => t.Amount);
+                if (latestInvestmentSnapshotByAccount.TryGetValue(account.Id, out var latestSnapshot))
+                {
+                    currentPosition = latestSnapshot.TotalMarketValue;
+                    lastTransactionDate = DateOnly.FromDateTime(latestSnapshot.SnapshotDateTime);
+                }
 
-                previousMonthExpenses = transactionData.PreviousMonthTransactions
-                    .Where(t => t.Amount < 0m)
-                    .Sum(t => -t.Amount);
+                if (openHoldingCountByAccount.TryGetValue(account.Id, out var holdingCount))
+                {
+                    transactionCount = holdingCount;
+                }
+            }
+            else if (transactionsByAccount.TryGetValue(account.Id, out var transactionData) && transactionData is not null)
+            {
+                lastTransactionDate = transactionData.LatestTransaction.Date;
+                transactionCount = transactionData.AllTransactions.Count;
 
-                previousMonthTransactionCount = transactionData.PreviousMonthTransactions.Count;
+                currentPosition = account.Type switch
+                {
+                    AccountType.CreditCard => Math.Abs(transactionData.AllTransactions.Sum(t => t.Amount)),
+                    AccountType.Mortgage => Math.Abs(transactionData.LatestTransaction.BankBalance),
+                    _ => transactionData.LatestTransaction.BankBalance
+                };
+
+                isLiability = account.Type is AccountType.CreditCard or AccountType.Mortgage;
+
+                if (transactionData.PreviousMonthTransactions.Count > 0)
+                {
+                    previousMonthIncome = transactionData.PreviousMonthTransactions
+                        .Where(t => t.Amount > 0m)
+                        .Sum(t => t.Amount);
+
+                    previousMonthExpenses = transactionData.PreviousMonthTransactions
+                        .Where(t => t.Amount < 0m)
+                        .Sum(t => -t.Amount);
+
+                    previousMonthTransactionCount = transactionData.PreviousMonthTransactions.Count;
+                }
             }
 
-            decimal previousMonthNet = previousMonthIncome - previousMonthExpenses;
+            var previousMonthNet = previousMonthIncome - previousMonthExpenses;
 
-            var summary = new AccountDashboardSummary(
+            summaries.Add(new AccountDashboardSummary(
                 account.Id,
                 account.Name,
                 account.Type.ToString(),
@@ -322,9 +354,7 @@ public sealed class DashboardApplicationService(
                 lastTransactionDate,
                 transactionCount,
                 previousMonthTransactionCount,
-                account.IsActive);
-
-            summaries.Add(summary);
+                account.IsActive));
         }
 
         return summaries;
@@ -349,35 +379,100 @@ public sealed class DashboardApplicationService(
 
     private async Task<List<AccountBalance>> GetLatestAccountBalancesAsync(CancellationToken cancellationToken)
     {
-        var latestPerAccount = await dbContext.Transactions
+        var activeAccounts = await dbContext.Accounts
             .AsNoTracking()
-            .GroupBy(transaction => transaction.AccountId)
-            .Select(group => new
-            {
-                AccountId = group.Key,
-                MaxDate = group.Max(item => item.Date)
-            })
+            .Where(account => account.IsActive)
+            .Select(account => new { account.Id, account.Type, account.IncludeInNetWorth })
             .ToListAsync(cancellationToken);
 
-        var balances = new List<AccountBalance>();
-        foreach (var latest in latestPerAccount)
-        {
-            var snapshot = await (
-                from transaction in dbContext.Transactions.AsNoTracking()
-                join account in dbContext.Accounts.AsNoTracking() on transaction.AccountId equals account.Id
-                where transaction.AccountId == latest.AccountId && transaction.Date == latest.MaxDate
-                orderby transaction.ImportedUtc descending
-                select new AccountBalance(account.Type, transaction.BankBalance))
-                .FirstOrDefaultAsync(cancellationToken);
+        var balances = new List<AccountBalance>(activeAccounts.Count);
 
-            if (snapshot is not null)
+        var nonInvestmentAccountIds = activeAccounts
+            .Where(account => account.Type != AccountType.Investment)
+            .Select(account => account.Id)
+            .ToList();
+
+        if (nonInvestmentAccountIds.Count > 0)
+        {
+            var latestPerAccount = await dbContext.Transactions
+                .AsNoTracking()
+                .Where(transaction => nonInvestmentAccountIds.Contains(transaction.AccountId))
+                .GroupBy(transaction => transaction.AccountId)
+                .Select(group => new
+                {
+                    AccountId = group.Key,
+                    MaxDate = group.Max(item => item.Date)
+                })
+                .ToListAsync(cancellationToken);
+
+            foreach (var latest in latestPerAccount)
             {
-                balances.Add(snapshot);
+                var snapshot = await (
+                    from transaction in dbContext.Transactions.AsNoTracking()
+                    join account in dbContext.Accounts.AsNoTracking() on transaction.AccountId equals account.Id
+                    where transaction.AccountId == latest.AccountId && transaction.Date == latest.MaxDate
+                    orderby transaction.ImportedUtc descending
+                    select new
+                    {
+                        account.Type,
+                        transaction.BankBalance,
+                        account.IncludeInNetWorth
+                    })
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (snapshot is not null)
+                {
+                    balances.Add(new AccountBalance(snapshot.Type, snapshot.BankBalance, snapshot.IncludeInNetWorth));
+                }
+            }
+        }
+
+        var investmentAccountIds = activeAccounts
+            .Where(account => account.Type == AccountType.Investment)
+            .Select(account => account.Id)
+            .ToList();
+
+        if (investmentAccountIds.Count > 0)
+        {
+            var latestInvestmentSnapshots = await dbContext.PortfolioSnapshots
+                .AsNoTracking()
+                .Where(snapshot => investmentAccountIds.Contains(snapshot.InvestmentAccountId))
+                .ToListAsync(cancellationToken);
+
+            var latestByAccount = latestInvestmentSnapshots
+                .GroupBy(snapshot => snapshot.InvestmentAccountId)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group
+                        .OrderByDescending(snapshot => snapshot.SnapshotDateTime)
+                        .ThenByDescending(snapshot => snapshot.CreatedAt)
+                        .First());
+
+            foreach (var account in activeAccounts.Where(account => account.Type == AccountType.Investment))
+            {
+                if (latestByAccount.TryGetValue(account.Id, out var latestSnapshot))
+                {
+                    balances.Add(new AccountBalance(account.Type, latestSnapshot.TotalMarketValue, account.IncludeInNetWorth));
+                    continue;
+                }
+
+                var latestTransactionBalance = await dbContext.Transactions
+                    .AsNoTracking()
+                    .Where(transaction => transaction.AccountId == account.Id)
+                    .OrderByDescending(transaction => transaction.Date)
+                    .ThenByDescending(transaction => transaction.ImportedUtc)
+                    .Select(transaction => (decimal?)transaction.BankBalance)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (latestTransactionBalance.HasValue)
+                {
+                    balances.Add(new AccountBalance(account.Type, latestTransactionBalance.Value, account.IncludeInNetWorth));
+                }
             }
         }
 
         return balances;
     }
 
-    private sealed record AccountBalance(AccountType Type, decimal Balance);
+    private sealed record AccountBalance(AccountType Type, decimal Balance, bool IncludeInNetWorth);
 }

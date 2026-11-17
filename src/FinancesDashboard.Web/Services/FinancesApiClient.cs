@@ -252,6 +252,87 @@ public sealed class FinancesApiClient(HttpClient httpClient)
         return forecast;
     }
 
+    public async Task<IReadOnlyList<InvestmentAccountModel>> GetInvestmentAccountsAsync(CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<List<InvestmentAccountModel>>("/api/investments/accounts", cancellationToken) ?? [];
+    }
+
+    public async Task<InvestmentAccountModel> CreateInvestmentAccountAsync(CreateInvestmentAccountRequestModel request, CancellationToken cancellationToken = default)
+    {
+        var response = await httpClient.PostAsJsonAsync("/api/investments/accounts", request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var account = await response.Content.ReadFromJsonAsync<InvestmentAccountModel>(cancellationToken);
+        return account ?? throw new InvalidOperationException("Investment account response payload was empty.");
+    }
+
+    public async Task<InvestmentAccountModel> UpdateInvestmentAccountAsync(Guid accountId, UpdateInvestmentAccountRequestModel request, CancellationToken cancellationToken = default)
+    {
+        var response = await httpClient.PutAsJsonAsync($"/api/investments/accounts/{accountId}", request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var account = await response.Content.ReadFromJsonAsync<InvestmentAccountModel>(cancellationToken);
+        return account ?? throw new InvalidOperationException("Investment account response payload was empty.");
+    }
+
+    public async Task<InvestmentPortfolioSummaryModel?> GetInvestmentPortfolioSummaryAsync(Guid accountId, CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<InvestmentPortfolioSummaryModel>($"/api/investments/{accountId}/summary", cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<InvestmentHoldingModel>> GetInvestmentHoldingsAsync(Guid accountId, CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<List<InvestmentHoldingModel>>($"/api/investments/{accountId}/holdings", cancellationToken) ?? [];
+    }
+
+    public async Task<InvestmentHoldingModel?> GetInvestmentHoldingAsync(Guid accountId, string instrumentCode, CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<InvestmentHoldingModel>($"/api/investments/{accountId}/holdings/{Uri.EscapeDataString(instrumentCode)}", cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PortfolioSnapshotModel>> GetPortfolioSnapshotsAsync(Guid accountId, CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<List<PortfolioSnapshotModel>>($"/api/investments/{accountId}/snapshots", cancellationToken) ?? [];
+    }
+
+    public async Task<IReadOnlyList<PortfolioImportBatchModel>> GetInvestmentImportHistoryAsync(Guid accountId, CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<List<PortfolioImportBatchModel>>($"/api/investments/{accountId}/imports", cancellationToken) ?? [];
+    }
+
+    public async Task<InvestmentImportPreviewResultModel> PreviewInvestmentImportAsync(
+        Guid accountId,
+        Stream fileStream,
+        string fileName,
+        decimal? tolerance = null,
+        CancellationToken cancellationToken = default)
+    {
+        using var content = new MultipartFormDataContent();
+        content.Add(new StreamContent(fileStream), "file", fileName);
+
+        var url = tolerance.HasValue
+            ? $"/api/investments/{accountId}/import/preview?tolerance={tolerance.Value}"
+            : $"/api/investments/{accountId}/import/preview";
+
+        var response = await httpClient.PostAsync(url, content, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var preview = await response.Content.ReadFromJsonAsync<InvestmentImportPreviewResultModel>(cancellationToken);
+        return preview ?? throw new InvalidOperationException("Investment import preview payload was empty.");
+    }
+
+    public async Task<InvestmentImportCommitResultModel> ConfirmInvestmentImportAsync(
+        Guid accountId,
+        ConfirmInvestmentImportRequestModel request,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await httpClient.PostAsJsonAsync($"/api/investments/{accountId}/import/confirm", request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadFromJsonAsync<InvestmentImportCommitResultModel>(cancellationToken);
+        return result ?? throw new InvalidOperationException("Investment import confirm payload was empty.");
+    }
+
     private sealed record SummaryResponse(
         int TransactionCount,
         decimal CurrentBalance,

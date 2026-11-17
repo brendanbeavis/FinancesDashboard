@@ -13,7 +13,17 @@ public sealed class AccountApplicationService(FinancesDashboardDbContext dbConte
         return await dbContext.Accounts
             .AsNoTracking()
             .OrderBy(account => account.Name)
-            .Select(account => new AccountDto(account.Id, account.Name, account.Type.ToString(), account.IsActive))
+            .Select(account => new AccountDto(
+                account.Id,
+                account.Name,
+                account.Type.ToString(),
+                account.IsActive,
+                account.AccountNumber,
+                account.CurrencyCode,
+                account.Provider,
+                account.IncludeInNetWorth,
+                account.CreatedAt,
+                account.UpdatedAt))
             .ToListAsync(cancellationToken);
     }
 
@@ -23,7 +33,17 @@ public sealed class AccountApplicationService(FinancesDashboardDbContext dbConte
             .AsNoTracking()
             .Where(account => account.Type == accountType)
             .OrderBy(account => account.Name)
-            .Select(account => new AccountDto(account.Id, account.Name, account.Type.ToString(), account.IsActive))
+            .Select(account => new AccountDto(
+                account.Id,
+                account.Name,
+                account.Type.ToString(),
+                account.IsActive,
+                account.AccountNumber,
+                account.CurrencyCode,
+                account.Provider,
+                account.IncludeInNetWorth,
+                account.CreatedAt,
+                account.UpdatedAt))
             .ToListAsync(cancellationToken);
     }
 
@@ -34,18 +54,36 @@ public sealed class AccountApplicationService(FinancesDashboardDbContext dbConte
             throw new ArgumentException($"Unknown account type '{request.Type}'.", nameof(request));
         }
 
+        var now = DateTime.UtcNow;
+
         var account = new Account
         {
             Id = Guid.NewGuid(),
             Name = request.Name,
             Type = accountType,
-            IsActive = true
+            IsActive = true,
+            AccountNumber = request.AccountNumber,
+            CurrencyCode = NormalizeCurrency(request.CurrencyCode),
+            Provider = request.Provider,
+            IncludeInNetWorth = request.IncludeInNetWorth,
+            CreatedAt = now,
+            UpdatedAt = now
         };
 
         dbContext.Accounts.Add(account);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return new AccountDto(account.Id, account.Name, account.Type.ToString(), account.IsActive);
+        return new AccountDto(
+            account.Id,
+            account.Name,
+            account.Type.ToString(),
+            account.IsActive,
+            account.AccountNumber,
+            account.CurrencyCode,
+            account.Provider,
+            account.IncludeInNetWorth,
+            account.CreatedAt,
+            account.UpdatedAt);
     }
 
     public async Task<AccountDto> UpdateAccountAsync(Guid id, UpdateAccountRequest request, CancellationToken cancellationToken)
@@ -58,11 +96,26 @@ public sealed class AccountApplicationService(FinancesDashboardDbContext dbConte
 
         account.Name = request.Name;
         account.IsActive = request.IsActive;
+        account.AccountNumber = request.AccountNumber;
+        account.CurrencyCode = NormalizeCurrency(request.CurrencyCode);
+        account.Provider = request.Provider;
+        account.IncludeInNetWorth = request.IncludeInNetWorth;
+        account.UpdatedAt = DateTime.UtcNow;
 
         dbContext.Accounts.Update(account);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return new AccountDto(account.Id, account.Name, account.Type.ToString(), account.IsActive);
+        return new AccountDto(
+            account.Id,
+            account.Name,
+            account.Type.ToString(),
+            account.IsActive,
+            account.AccountNumber,
+            account.CurrencyCode,
+            account.Provider,
+            account.IncludeInNetWorth,
+            account.CreatedAt,
+            account.UpdatedAt);
     }
 
     public async Task DeleteAccountAsync(Guid id, CancellationToken cancellationToken)
@@ -176,5 +229,12 @@ public sealed class AccountApplicationService(FinancesDashboardDbContext dbConte
 
         dbContext.Transactions.Remove(transaction);
         await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private static string NormalizeCurrency(string currencyCode)
+    {
+        return string.IsNullOrWhiteSpace(currencyCode)
+            ? "AUD"
+            : currencyCode.Trim().ToUpperInvariant();
     }
 }

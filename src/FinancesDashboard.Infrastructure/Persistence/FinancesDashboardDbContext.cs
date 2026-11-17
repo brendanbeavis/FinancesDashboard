@@ -20,6 +20,18 @@ public sealed class FinancesDashboardDbContext(DbContextOptions<FinancesDashboar
 
     public DbSet<InterestRatePeriod> InterestRatePeriods => Set<InterestRatePeriod>();
 
+    public DbSet<InvestmentInstrument> InvestmentInstruments => Set<InvestmentInstrument>();
+
+    public DbSet<PortfolioHolding> PortfolioHoldings => Set<PortfolioHolding>();
+
+    public DbSet<PortfolioSnapshot> PortfolioSnapshots => Set<PortfolioSnapshot>();
+
+    public DbSet<HoldingSnapshot> HoldingSnapshots => Set<HoldingSnapshot>();
+
+    public DbSet<PortfolioImportBatch> PortfolioImportBatches => Set<PortfolioImportBatch>();
+
+    public DbSet<PortfolioImportIssue> PortfolioImportIssues => Set<PortfolioImportIssue>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new AccountConfiguration());
@@ -29,6 +41,12 @@ public sealed class FinancesDashboardDbContext(DbContextOptions<FinancesDashboar
         modelBuilder.ApplyConfiguration(new MortgageConfiguration());
         modelBuilder.ApplyConfiguration(new MortgageOffsetAccountConfiguration());
         modelBuilder.ApplyConfiguration(new InterestRatePeriodConfiguration());
+        modelBuilder.ApplyConfiguration(new InvestmentInstrumentConfiguration());
+        modelBuilder.ApplyConfiguration(new PortfolioHoldingConfiguration());
+        modelBuilder.ApplyConfiguration(new PortfolioSnapshotConfiguration());
+        modelBuilder.ApplyConfiguration(new HoldingSnapshotConfiguration());
+        modelBuilder.ApplyConfiguration(new PortfolioImportBatchConfiguration());
+        modelBuilder.ApplyConfiguration(new PortfolioImportIssueConfiguration());
 
         base.OnModelCreating(modelBuilder);
     }

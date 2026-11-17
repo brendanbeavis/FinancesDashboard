@@ -2,7 +2,9 @@ using ApexCharts;
 using FinancesDashboard.Web;
 using FinancesDashboard.Web.Components;
 using FinancesDashboard.Web.Services;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,9 +33,34 @@ builder.Services.Configure<FormOptions>(options =>
 builder.Services.AddOutputCache();
 builder.Services.AddApexCharts();
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
+
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+var apiBaseUrl = builder.Configuration["Api:BaseUrl"];
+if (string.IsNullOrWhiteSpace(apiBaseUrl))
+{
+    apiBaseUrl = builder.Environment.IsDevelopment()
+        ? "https+http://apiservice"
+        : "http://apiservice:8080";
+}
+
+var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"];
+if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
+{
+    Directory.CreateDirectory(dataProtectionKeysPath);
+
+    builder.Services.AddDataProtection()
+        .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
+}
+
 builder.Services.AddHttpClient<FinancesApiClient>(client =>
     {
-        client.BaseAddress = new("https+http://apiservice");
+        client.BaseAddress = new Uri(apiBaseUrl, UriKind.Absolute);
         client.Timeout = TimeSpan.FromMinutes(1);
     });
 
@@ -48,6 +75,7 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
+app.UseForwardedHeaders();
 app.UseHttpsRedirection();
 
 app.UseAntiforgery();
@@ -58,6 +86,8 @@ app.MapStaticAssets();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 app.MapDefaultEndpoints();
 
