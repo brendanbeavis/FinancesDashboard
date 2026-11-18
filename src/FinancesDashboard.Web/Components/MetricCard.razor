@@ -1,0 +1,48 @@
+<div class="fd-metric-card @(string.IsNullOrWhiteSpace(AccentClass) ? string.Empty : AccentClass)">
+    <div class="fd-metric-card__label">@Label</div>
+    <div class="fd-metric-card__value @(string.IsNullOrWhiteSpace(ValueClass) ? string.Empty : ValueClass)" aria-live="polite">
+        <span @key="valueVersion" class="fd-metric-card__value-text">@Value</span>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(SupportingText))
+    {
+        <div class="fd-metric-card__supporting-text">@SupportingText</div>
+    }
+</div>
+
+@code {
+    private string? previousValue;
+    private int valueVersion;
+
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string Value { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? SupportingText { get; set; }
+
+    [Parameter]
+    public string? AccentClass { get; set; }
+
+    [Parameter]
+    public string? ValueClass { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (previousValue is null)
+        {
+            previousValue = Value;
+            return;
+        }
+
+        if (string.Equals(previousValue, Value, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        previousValue = Value;
+        valueVersion++;
+    }
+}

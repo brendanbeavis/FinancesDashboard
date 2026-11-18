@@ -1,0 +1,27 @@
+@namespace FinancesDashboard.Web.Components
+
+<span class="fd-provider-icon @ProviderClass" title="@(ProviderName)" aria-label="@(ProviderName)">
+    <span class="fd-provider-icon__mark">@Initials</span>
+</span>
+
+@code {
+    [Parameter]
+    public string? Provider { get; set; }
+
+    private string ProviderName => string.IsNullOrWhiteSpace(Provider) ? "Unknown provider" : Provider.Trim();
+
+    private string Initials => ProviderName switch
+    {
+        var name when name.Equals("CBA", StringComparison.OrdinalIgnoreCase) => "CBA",
+        var name when name.Equals("Coles", StringComparison.OrdinalIgnoreCase) => "C",
+        var name when name.Equals("Commonwealth Bank", StringComparison.OrdinalIgnoreCase) => "CBA",
+        _ => ProviderName.Length >= 2 ? ProviderName[..2].ToUpperInvariant() : "?"
+    };
+
+    private string ProviderClass => ProviderName switch
+    {
+        var name when name.Equals("CBA", StringComparison.OrdinalIgnoreCase) || name.Equals("Commonwealth Bank", StringComparison.OrdinalIgnoreCase) => "fd-provider-icon--cba",
+        var name when name.Equals("Coles", StringComparison.OrdinalIgnoreCase) => "fd-provider-icon--coles",
+        _ => "fd-provider-icon--generic"
+    };
+}

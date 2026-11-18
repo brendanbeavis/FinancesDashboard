@@ -1,0 +1,43 @@
+<div class="fd-section-title @(string.IsNullOrWhiteSpace(Class) ? string.Empty : Class)">
+    <div>
+        <h2>@Title</h2>
+        @if (!string.IsNullOrWhiteSpace(Description))
+        {
+            <p>@Description</p>
+        }
+    </div>
+
+    @if (MetaContent is not null || Actions is not null)
+    {
+        <div class="fd-section-title__meta">
+            @if (MetaContent is not null)
+            {
+                <div class="fd-section-title__meta-content">@MetaContent</div>
+            }
+
+            @if (Actions is not null)
+            {
+                <div class="fd-section-title__actions">@Actions</div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter]
+    public RenderFragment? MetaContent { get; set; }
+
+    [Parameter]
+    public RenderFragment? Actions { get; set; }
+}
+
+@using Microsoft.AspNetCore.Components

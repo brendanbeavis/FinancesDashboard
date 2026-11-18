@@ -1,0 +1,78 @@
+﻿<script type="module" src="@Assets["Components/Layout/NavMenu.razor.js"]"></script>
+
+<div class="fd-nav-shell">
+    <div class="fd-nav-brand-row">
+        <a class="fd-nav-brand" href="">
+            <span class="fd-nav-brand__mark">FD</span>
+            <span>
+                <span class="fd-nav-brand__eyebrow">Finance Dashboard</span>
+                <span class="fd-nav-brand__title">Your money, your future.</span>
+            </span>
+        </a>
+    </div>
+
+    <input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+    <div id="nav-scrollable" class="nav-scrollable">
+        <nav class="nav flex-column fd-nav-list">
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                    <span>
+                        <span class="fd-nav-link__title">Dashboard</span>
+                        <span class="fd-nav-link__meta">Net position, cash, and liabilities</span>
+                    </span>
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="accounts">
+                    <span>
+                        <span class="fd-nav-link__title">Accounts</span>
+                        <span class="fd-nav-link__meta">Sources, balances, and history</span>
+                    </span>
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="mortgages">
+                    <span>
+                        <span class="fd-nav-link__title">Mortgages</span>
+                        <span class="fd-nav-link__meta">Debt, offsets, and payoff timing</span>
+                    </span>
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="investments">
+                    <span>
+                        <span class="fd-nav-link__title">Investments</span>
+                        <span class="fd-nav-link__meta">Holdings, allocation, and snapshots</span>
+                    </span>
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="import">
+                    <span>
+                        <span class="fd-nav-link__title">Import</span>
+                        <span class="fd-nav-link__meta">Upload and process CSV transactions</span>
+                    </span>
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="settings">
+                    <span>
+                        <span class="fd-nav-link__title">Settings</span>
+                        <span class="fd-nav-link__meta">Preferences and data management</span>
+                    </span>
+                </NavLink>
+            </div>
+        </nav>
+
+        <div class="fd-nav-footer px-3">
+            <div class="fd-nav-footer__label">ABOUT</div>
+            <div class="fd-nav-footer__value">Dashboard by beavis.</div>
+        </div>
+    </div>
+</div>

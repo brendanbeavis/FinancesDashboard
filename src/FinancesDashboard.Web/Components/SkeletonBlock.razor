@@ -1,0 +1,42 @@
+<div class="@BuildClassName()"
+     style="@BuildStyle()"
+     aria-hidden="true"></div>
+
+@code {
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter]
+    public string Height { get; set; } = "1rem";
+
+    [Parameter]
+    public string Width { get; set; } = "100%";
+
+    [Parameter]
+    public bool Rounded { get; set; } = true;
+
+    private string BuildClassName()
+    {
+        var classes = new List<string> { "fd-skeleton" };
+
+        if (Rounded)
+        {
+            classes.Add("fd-skeleton--rounded");
+        }
+
+        if (!string.IsNullOrWhiteSpace(Class))
+        {
+            classes.Add(Class);
+        }
+
+        return string.Join(" ", classes);
+    }
+
+    private string BuildStyle()
+    {
+        return $"height: {Height}; width: {Width};";
+    }
+}
+
+@using Microsoft.AspNetCore.Components
+@using System.Collections.Generic

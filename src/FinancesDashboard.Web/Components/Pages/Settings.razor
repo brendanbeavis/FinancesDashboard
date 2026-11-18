@@ -1,0 +1,325 @@
+@page "/settings"
+@inject FinancesApiClient ApiClient
+@using System.Text.Json
+
+<PageTitle>Settings</PageTitle>
+
+<PageHeader Eyebrow="Administration" Title="Settings" Description="Browse and maintain the raw application database tables.">
+</PageHeader>
+
+@if (isLoadingTables)
+{
+    <div class="fd-section-surface"><em>Loading tables...</em></div>
+}
+else if (!string.IsNullOrWhiteSpace(loadError))
+{
+    <div class="alert alert-danger">@loadError</div>
+}
+else
+{
+    <div class="fd-section-surface mb-3">
+        <div class="fd-section-title mb-2">
+            <div>
+                <h2>Database tables</h2>
+                <p>Changes made here write directly to the SQLite database. Use care with primary keys and foreign-key relationships.</p>
+            </div>
+            @if (selectedTable is not null)
+            {
+                <button class="btn btn-success" @onclick="OpenAddDialog">+ Add Record</button>
+            }
+        </div>
+
+        <label class="form-label" for="raw-table-select">Table</label>
+        <select id="raw-table-select" class="form-select" value="@selectedTableName" @onchange="OnTableChanged">
+            <option value="">Select a table</option>
+            @foreach (var table in tables)
+            {
+                <option value="@table.Name">@table.Name (@table.RowCount rows)</option>
+            }
+        </select>
+    </div>
+
+    if (!string.IsNullOrWhiteSpace(selectedTableName))
+    {
+        if (isLoadingTable)
+        {
+            <div class="fd-section-surface"><em>Loading records...</em></div>
+        }
+        else if (table is not null)
+        {
+            <div class="fd-section-surface fd-table-surface">
+                <div class="fd-section-title px-4 pt-4 pb-2">
+                    <div>
+                        <h2>@table.Name</h2>
+                        <p>@table.Rows.Count record(s) displayed (maximum 500).</p>
+                    </div>
+                </div>
+
+                @if (table.Rows.Count == 0)
+                {
+                    <div class="alert alert-secondary mx-4">No records found.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    @foreach (var column in table.Columns)
+                                    {
+                                        <th>@column.Name@if (column.IsPrimaryKey) { <span class="fd-status-chip fd-status-chip--muted ms-1">PK</span> }</th>
+                                    }
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in table.Rows)
+                                {
+                                    <tr>
+                                        @foreach (var column in table.Columns)
+                                        {
+                                            <td class="text-nowrap">@FormatValue(row, column.Name)</td>
+                                        }
+                                        <td class="text-end text-nowrap">
+                                            @if (pendingDeleteRow == row)
+                                            {
+                                                <button class="btn btn-sm btn-danger me-2" @onclick="() => ConfirmDelete(row)">Confirm</button>
+                                                <button class="btn btn-sm btn-outline-secondary" @onclick="CancelDelete">Cancel</button>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-sm btn-primary me-2" @onclick="() => OpenEditDialog(row)">Edit</button>
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => RequestDelete(row)">Delete</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        }
+    }
+}
+
+@if (showEditor && table is not null)
+{
+    <div class="fd-modal-backdrop position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="z-index:1050;">
+        <div class="modal-dialog modal-lg mb-0" role="dialog" aria-modal="true">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(isAddMode ? "Add record" : "Edit record") — @table.Name</h5>
+                    <button type="button" class="btn-close" @onclick="CloseEditor" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrWhiteSpace(editorError))
+                    {
+                        <div class="alert alert-danger">@editorError</div>
+                    }
+                    <div class="row g-3">
+                        @foreach (var column in table.Columns)
+                        {
+                            var isKeyField = column.IsPrimaryKey;
+                            <div class="col-md-6">
+                                <label class="form-label" for="field-@column.Name">
+                                    @column.Name
+                                    @if (isKeyField) { <span class="text-muted">(primary key)</span> }
+                                    @if (!column.IsNullable) { <span class="text-danger">*</span> }
+                                </label>
+                                <input id="field-@column.Name" class="form-control"
+                                       type="text"
+                                       disabled="@(isKeyField && !isAddMode)"
+                                       value="@GetEditValue(column.Name)"
+                                       @oninput="e => SetEditValue(column.Name, e.Value?.ToString() ?? string.Empty)" />
+                                <div class="form-text">@column.ClrType</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" @onclick="CloseEditor">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveEditor" disabled="@isSaving">@(isSaving ? "Saving..." : "Save")</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<RawTableListItemModel> tables = [];
+    private RawTableDataModel? table;
+    private string? selectedTableName;
+    private string? selectedTable;
+    private bool isLoadingTables = true;
+    private bool isLoadingTable;
+    private bool isSaving;
+    private string? loadError;
+    private string? editorError;
+    private bool showEditor;
+    private bool isAddMode;
+    private Dictionary<string, string> editValues = new(StringComparer.Ordinal);
+    private Dictionary<string, JsonElement>? originalKey;
+    private Dictionary<string, JsonElement>? pendingDeleteRow;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTablesAsync();
+    }
+
+    private async Task LoadTablesAsync()
+    {
+        isLoadingTables = true;
+        loadError = null;
+        try { tables = (await ApiClient.GetRawTablesAsync()).ToList(); }
+        catch (Exception ex) { loadError = ex.Message; }
+        finally { isLoadingTables = false; }
+    }
+
+    private async Task OnTableChanged(ChangeEventArgs args)
+    {
+        selectedTableName = args.Value?.ToString();
+        selectedTable = selectedTableName;
+        table = null;
+        pendingDeleteRow = null;
+        if (!string.IsNullOrWhiteSpace(selectedTableName))
+            await LoadTableAsync(selectedTableName);
+    }
+
+    private async Task LoadTableAsync(string tableName)
+    {
+        isLoadingTable = true;
+        loadError = null;
+        try
+        {
+            table = await ApiClient.GetRawTableAsync(tableName);
+            selectedTable = table.Name;
+        }
+        catch (Exception ex) { loadError = ex.Message; }
+        finally { isLoadingTable = false; }
+    }
+
+    private static string FormatValue(Dictionary<string, JsonElement> row, string columnName)
+    {
+        if (!row.TryGetValue(columnName, out var value) || value.ValueKind == JsonValueKind.Null)
+            return "—";
+        return value.ValueKind switch
+        {
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            JsonValueKind.String => value.GetString() ?? "",
+            _ => value.ToString()
+        };
+    }
+
+    private void OpenAddDialog()
+    {
+        if (table is null) return;
+        isAddMode = true;
+        editorError = null;
+        editValues = table.Columns.ToDictionary(c => c.Name, _ => string.Empty, StringComparer.Ordinal);
+        originalKey = null;
+        showEditor = true;
+    }
+
+    private void OpenEditDialog(Dictionary<string, JsonElement> row)
+    {
+        if (table is null) return;
+        isAddMode = false;
+        editorError = null;
+        editValues = table.Columns.ToDictionary(c => c.Name,
+            c => row.TryGetValue(c.Name, out var value) ? FormatValue(row, c.Name) : string.Empty,
+            StringComparer.Ordinal);
+        originalKey = table.Columns.Where(c => c.IsPrimaryKey)
+            .Where(c => row.ContainsKey(c.Name))
+            .ToDictionary(c => c.Name, c => row[c.Name], StringComparer.Ordinal);
+        showEditor = true;
+    }
+
+    private string GetEditValue(string columnName) => editValues.TryGetValue(columnName, out var value) ? value : string.Empty;
+    private void SetEditValue(string columnName, string value) => editValues[columnName] = value;
+
+    private async Task SaveEditor()
+    {
+        if (table is null) return;
+        isSaving = true;
+        editorError = null;
+        try
+        {
+            var values = BuildJsonValues();
+            if (isAddMode)
+            {
+                await ApiClient.InsertRawRowAsync(table.Name, values);
+            }
+            else
+            {
+                if (originalKey is null) throw new InvalidOperationException("The primary key could not be determined.");
+                await ApiClient.UpdateRawRowAsync(table.Name, new RawTableMutationModel(originalKey, values));
+            }
+            showEditor = false;
+            await LoadTablesAsync();
+            await LoadTableAsync(table.Name);
+        }
+        catch (Exception ex) { editorError = ex.Message; }
+        finally { isSaving = false; }
+    }
+
+    private Dictionary<string, JsonElement> BuildJsonValues()
+    {
+        var result = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        if (table is null) return result;
+
+        foreach (var column in table.Columns)
+        {
+            var text = GetEditValue(column.Name);
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                if (!isAddMode && column.IsPrimaryKey)
+                    continue;
+                result[column.Name] = JsonSerializer.SerializeToElement<object?>(null);
+                continue;
+            }
+
+            JsonElement element;
+            if (column.ClrType == nameof(Boolean)) element = JsonSerializer.SerializeToElement(bool.Parse(text));
+            else if (column.ClrType == nameof(Int32)) element = JsonSerializer.SerializeToElement(int.Parse(text));
+            else if (column.ClrType == nameof(Int64)) element = JsonSerializer.SerializeToElement(long.Parse(text));
+            else if (column.ClrType == nameof(Int16)) element = JsonSerializer.SerializeToElement(short.Parse(text));
+            else if (column.ClrType == nameof(Decimal)) element = JsonSerializer.SerializeToElement(decimal.Parse(text));
+            else if (column.ClrType == nameof(Double)) element = JsonSerializer.SerializeToElement(double.Parse(text));
+            else if (column.ClrType == nameof(Single)) element = JsonSerializer.SerializeToElement(float.Parse(text));
+            else element = JsonSerializer.SerializeToElement(text);
+            result[column.Name] = element;
+        }
+        return result;
+    }
+
+    private void CloseEditor()
+    {
+        showEditor = false;
+        editorError = null;
+    }
+
+    private void RequestDelete(Dictionary<string, JsonElement> row)
+    {
+        pendingDeleteRow = row;
+    }
+
+    private void CancelDelete() => pendingDeleteRow = null;
+
+    private async Task ConfirmDelete(Dictionary<string, JsonElement> row)
+    {
+        if (table is null) return;
+        try
+        {
+            var key = table.Columns.Where(c => c.IsPrimaryKey)
+                .Where(c => row.ContainsKey(c.Name))
+                .ToDictionary(c => c.Name, c => row[c.Name], StringComparer.Ordinal);
+            await ApiClient.DeleteRawRowAsync(table.Name, key);
+            pendingDeleteRow = null;
+            await LoadTablesAsync();
+            await LoadTableAsync(table.Name);
+        }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+}

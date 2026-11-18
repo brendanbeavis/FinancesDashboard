@@ -1,0 +1,279 @@
+@page "/investments"
+
+@inject FinancesApiClient ApiClient
+
+<PageTitle>Investments</PageTitle>
+
+<PageHeader
+    Eyebrow="Portfolio"
+    Title="Investments"
+    Description="Import holdings snapshots, review allocation, and track portfolio value across time." />
+
+@if (!string.IsNullOrWhiteSpace(loadError))
+{
+    <div class="alert alert-danger">@loadError</div>
+}
+
+<div class="fd-section-surface mb-3">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-6">
+            <label class="form-label" for="investment-account">Investment account</label>
+            <select id="investment-account" class="form-select" @bind="selectedAccountId" @bind:after="OnAccountChangedAsync">
+                <option value="">Select account</option>
+                @foreach (var account in accounts)
+                {
+                    <option value="@account.Id">@account.Name (@account.CurrencyCode)</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-6">
+            <button class="btn btn-outline-secondary" @onclick="LoadAccountsAsync">Refresh accounts</button>
+        </div>
+    </div>
+</div>
+
+@if (selectedAccountGuid.HasValue)
+{
+    @if (summary is not null)
+    {
+        <div class="row g-3 mb-3">
+            <div class="col-12 col-xl-4">
+                <MetricCard Label="Market value"
+                            Value="@FormatCurrency(summary.TotalMarketValue, summary.CurrencyCode)"
+                            ValueClass="@GetSignedValueClass(summary.TotalUnrealisedProfitLoss)" />
+            </div>
+            <div class="col-12 col-xl-4">
+                <MetricCard Label="Cost base"
+                            Value="@FormatCurrency(summary.TotalCostBase, summary.CurrencyCode)" />
+            </div>
+            <div class="col-12 col-xl-4">
+                <MetricCard Label="Unrealised P/L"
+                            Value="@FormatCurrency(summary.TotalUnrealisedProfitLoss, summary.CurrencyCode)"
+                            ValueClass="@GetSignedValueClass(summary.TotalUnrealisedProfitLoss)"
+                            SupportingText="@($"{summary.TotalUnrealisedProfitLossPercentage:N2}%")" />
+            </div>
+        </div>
+
+        @if (summary.LatestSnapshotDateTime.HasValue)
+        {
+            <div class="fd-semantic-note mb-3">Latest snapshot: @summary.LatestSnapshotDateTime.Value.ToString("dd MMM yyyy HH:mm") @(summary.IsStale ? "(stale)" : string.Empty)</div>
+        }
+    }
+
+    <div class="fd-section-surface mb-3">
+        <h2 class="h5 mb-3">Holdings</h2>
+
+        <input class="form-control mb-2" placeholder="Filter by code" @bind="holdingFilter" />
+
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Units</th>
+                        <th>Avg Cost</th>
+                        <th>Price</th>
+                        <th>Cost Base</th>
+                        <th>Market Value</th>
+                        <th>Unrealised P/L</th>
+                        <th>Return %</th>
+                        <th>Weight %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var holding in FilteredHoldings)
+                    {
+                        <tr>
+                            <td>@holding.InstrumentCode</td>
+                            <td>@holding.Units.ToString("N3")</td>
+                            <td>@holding.AverageCostPerUnit.ToString("N4")</td>
+                            <td>@holding.CurrentPrice.ToString("N4")</td>
+                            <td>@holding.TotalCostBase.ToString("N2")</td>
+                            <td>@holding.CurrentMarketValue.ToString("N2")</td>
+                            <td class="@GetSignedValueClass(holding.UnrealisedProfitLoss)">@holding.UnrealisedProfitLoss.ToString("N2")</td>
+                            <td class="@GetSignedValueClass(holding.UnrealisedProfitLossPercentage)">@holding.UnrealisedProfitLossPercentage.ToString("N2")%</td>
+                            <td>@holding.PortfolioWeightPercentage.ToString("N2")%</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="fd-section-surface mb-3">
+        <h2 class="h5 mb-3">Portfolio history</h2>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Snapshot</th>
+                        <th>Market Value</th>
+                        <th>Cost Base</th>
+                        <th>Unrealised P/L</th>
+                        <th>Return %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var snapshot in snapshots)
+                    {
+                        <tr>
+                            <td>@snapshot.SnapshotDateTime.ToString("dd MMM yyyy HH:mm")</td>
+                            <td>@snapshot.TotalMarketValue.ToString("N2")</td>
+                            <td>@snapshot.TotalCostBase.ToString("N2")</td>
+                            <td class="@GetSignedValueClass(snapshot.TotalUnrealisedProfitLoss)">@snapshot.TotalUnrealisedProfitLoss.ToString("N2")</td>
+                            <td class="@GetSignedValueClass(snapshot.TotalUnrealisedProfitLossPercentage)">@snapshot.TotalUnrealisedProfitLossPercentage.ToString("N2")%</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<InvestmentAccountModel> accounts = [];
+    private IReadOnlyList<InvestmentHoldingModel> holdings = [];
+    private IReadOnlyList<PortfolioSnapshotModel> snapshots = [];
+    private InvestmentPortfolioSummaryModel? summary;
+
+    private string? selectedAccountId;
+    private Guid? selectedAccountGuid;
+    private string? selectedFileName;
+    private IBrowserFile? selectedFile;
+    private string? loadError;
+    private string holdingFilter = string.Empty;
+    private decimal tolerance = 0.05m;
+    private bool replaceExistingSnapshot;
+    private bool isPreviewing;
+    private bool isConfirming;
+
+    private InvestmentImportPreviewResultModel? previewResult;
+    private InvestmentImportCommitResultModel? commitResult;
+    private string? commitError;
+
+    private IEnumerable<InvestmentHoldingModel> FilteredHoldings => holdings
+        .Where(holding => string.IsNullOrWhiteSpace(holdingFilter)
+            || holding.InstrumentCode.Contains(holdingFilter, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAccountsAsync();
+    }
+
+    private async Task LoadAccountsAsync()
+    {
+        loadError = null;
+
+        try
+        {
+            accounts = await ApiClient.GetInvestmentAccountsAsync();
+
+            if (!selectedAccountGuid.HasValue && accounts.Count > 0)
+            {
+                selectedAccountGuid = accounts[0].Id;
+                selectedAccountId = accounts[0].Id.ToString();
+            }
+
+            if (selectedAccountGuid.HasValue)
+            {
+                await LoadSelectedAccountAsync(selectedAccountGuid.Value);
+            }
+        }
+        catch (Exception ex)
+        {
+            loadError = $"Unable to load investments: {ex.Message}";
+        }
+    }
+
+    private async Task OnAccountChangedAsync()
+    {
+        if (!Guid.TryParse(selectedAccountId, out var accountId))
+        {
+            selectedAccountGuid = null;
+            summary = null;
+            holdings = [];
+            snapshots = [];
+            return;
+        }
+
+        selectedAccountGuid = accountId;
+        await LoadSelectedAccountAsync(accountId);
+    }
+
+    private async Task LoadSelectedAccountAsync(Guid accountId)
+    {
+        summary = await ApiClient.GetInvestmentPortfolioSummaryAsync(accountId);
+        holdings = await ApiClient.GetInvestmentHoldingsAsync(accountId);
+        snapshots = await ApiClient.GetPortfolioSnapshotsAsync(accountId);
+    }
+
+    private Task OnFileSelected(InputFileChangeEventArgs args)
+    {
+        selectedFile = args.File;
+        selectedFileName = selectedFile?.Name;
+        previewResult = null;
+        commitResult = null;
+        return Task.CompletedTask;
+    }
+
+    private async Task PreviewImportAsync()
+    {
+        if (!selectedAccountGuid.HasValue || selectedFile is null)
+        {
+            return;
+        }
+
+        isPreviewing = true;
+        try
+        {
+            await using var stream = selectedFile.OpenReadStream(5 * 1024 * 1024);
+            previewResult = await ApiClient.PreviewInvestmentImportAsync(selectedAccountGuid.Value, stream, selectedFile.Name, tolerance);
+            commitResult = null;
+        }
+        finally
+        {
+            isPreviewing = false;
+        }
+    }
+
+    private async Task ConfirmImportAsync()
+    {
+        if (!selectedAccountGuid.HasValue || previewResult is null || !previewResult.SnapshotDateTime.HasValue)
+        {
+            return;
+        }
+
+        isConfirming = true;
+        commitError = null;
+        commitResult = null;
+        try
+        {
+            var request = new ConfirmInvestmentImportRequestModel(
+                selectedAccountGuid.Value,
+                previewResult.FileName,
+                previewResult.FileHash,
+                previewResult.SnapshotDateTime.Value,
+                previewResult.CurrencyCode,
+                replaceExistingSnapshot,
+                previewResult.Holdings,
+                previewResult.Issues);
+
+            commitResult = await ApiClient.ConfirmInvestmentImportAsync(selectedAccountGuid.Value, request);
+            await LoadSelectedAccountAsync(selectedAccountGuid.Value);
+        }
+        catch (Exception ex)
+        {
+            commitError = ex.Message;
+        }
+        finally
+        {
+            isConfirming = false;
+        }
+    }
+
+    private static string GetSignedValueClass(decimal value)
+        => value > 0m ? "fd-value--positive" : value < 0m ? "fd-value--negative" : string.Empty;
+
+    private static string FormatCurrency(decimal value, string currencyCode)
+        => string.Create(System.Globalization.CultureInfo.GetCultureInfo("en-AU"), $"{currencyCode} {value:N2}");
+}
