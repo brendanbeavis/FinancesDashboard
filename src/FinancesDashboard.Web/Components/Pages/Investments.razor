@@ -61,78 +61,6 @@
     }
 
     <div class="fd-section-surface mb-3">
-        <h2 class="h5 mb-3">Import holdings snapshot</h2>
-
-        <div class="row g-3 align-items-end">
-            <div class="col-md-6">
-                <InputFile OnChange="OnFileSelected" accept=".csv,text/csv" class="form-control" />
-                @if (!string.IsNullOrWhiteSpace(selectedFileName))
-                {
-                    <div class="form-text">Selected: @selectedFileName</div>
-                }
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Tolerance</label>
-                <input class="form-control" type="number" step="0.01" @bind="tolerance" />
-            </div>
-            <div class="col-md-3">
-                <button class="btn btn-primary" @onclick="PreviewImportAsync" disabled="@isPreviewing">@(isPreviewing ? "Previewing..." : "Preview import")</button>
-            </div>
-        </div>
-
-        @if (previewResult is not null)
-        {
-            <div class="mt-3">
-                <div class="fd-semantic-note mb-2">Snapshot time: @(previewResult.SnapshotDateTime?.ToString("dd MMM yyyy HH:mm") ?? "Not detected")</div>
-                <div class="fd-semantic-note mb-2">Valid rows: @previewResult.SuccessfulRows | Issues: @previewResult.FailedRows</div>
-
-                @if (previewResult.DuplicateFileDetected || previewResult.DuplicateSnapshotDetected)
-                {
-                    <div class="alert alert-warning">
-                        @if (previewResult.DuplicateFileDetected)
-                        {
-                            <div>Duplicate file hash detected for this account.</div>
-                        }
-                        @if (previewResult.DuplicateSnapshotDetected)
-                        {
-                            <div>Snapshot timestamp already exists for this account.</div>
-                        }
-                    </div>
-                }
-
-                @if (previewResult.Issues.Count > 0)
-                {
-                    <div class="alert alert-warning">
-                        <strong>Validation issues</strong>
-                        <ul class="mb-0">
-                            @foreach (var issue in previewResult.Issues.Take(10))
-                            {
-                                <li>Row @issue.RowNumber: @issue.ErrorMessage</li>
-                            }
-                        </ul>
-                    </div>
-                }
-
-                <div class="form-check mb-3">
-                    <input id="replace-snapshot" class="form-check-input" type="checkbox" @bind="replaceExistingSnapshot" />
-                    <label class="form-check-label" for="replace-snapshot">Replace existing snapshot/file if duplicate detected</label>
-                </div>
-
-                <button class="btn btn-success" @onclick="ConfirmImportAsync" disabled="@(isConfirming || previewResult.HasBlockingErrors)">
-                    @(isConfirming ? "Importing..." : "Confirm import")
-                </button>
-
-                @if (commitResult is not null)
-                {
-                    <div class="alert alert-info mt-3">
-                        Imported rows: @commitResult.ImportedRows, failed rows: @commitResult.FailedRows, closed holdings: @commitResult.ClosedHoldings
-                    </div>
-                }
-            </div>
-        }
-    </div>
-
-    <div class="fd-section-surface mb-3">
         <h2 class="h5 mb-3">Holdings</h2>
 
         <input class="form-control mb-2" placeholder="Filter by code" @bind="holdingFilter" />
@@ -221,6 +149,7 @@
 
     private InvestmentImportPreviewResultModel? previewResult;
     private InvestmentImportCommitResultModel? commitResult;
+    private string? commitError;
 
     private IEnumerable<InvestmentHoldingModel> FilteredHoldings => holdings
         .Where(holding => string.IsNullOrWhiteSpace(holdingFilter)
@@ -315,6 +244,8 @@
         }
 
         isConfirming = true;
+        commitError = null;
+        commitResult = null;
         try
         {
             var request = new ConfirmInvestmentImportRequestModel(
@@ -329,6 +260,10 @@
 
             commitResult = await ApiClient.ConfirmInvestmentImportAsync(selectedAccountGuid.Value, request);
             await LoadSelectedAccountAsync(selectedAccountGuid.Value);
+        }
+        catch (Exception ex)
+        {
+            commitError = ex.Message;
         }
         finally
         {

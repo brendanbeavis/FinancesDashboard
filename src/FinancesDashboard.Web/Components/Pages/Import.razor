@@ -15,37 +15,53 @@ else if (!string.IsNullOrWhiteSpace(loadError))
 {
     <div class="alert alert-danger">@loadError</div>
 }
-else if (accounts.Count == 0)
+else if (accounts.Count == 0 && investmentAccounts.Count == 0)
 {
     <div class="alert alert-secondary">
-        No accounts available. Create an account first in the Accounts page.
+        No accounts available. Create an account first in the Accounts or Investments page.
     </div>
 }
 else
 {
     <div class="card">
         <div class="card-body">
-            
+            <div class="mb-3">
+                <label class="form-label" for="import-type">Data Type</label>
+                <select id="import-type" class="form-select" @bind="selectedImportType" @bind:after="OnImportTypeChangedAsync">
+                    <option value="">Select data type</option>
+                    <option value="cba">CBA Bank Account</option>
+                    <option value="coles">Coles Credit Card</option>
+                    <option value="cba-investments">CBA Investment Holdings</option>
+                </select>
+            </div>
+
             <div class="mb-3">
                 <label class="form-label" for="import-account">Account</label>
                 <select id="import-account" class="form-select" @bind="selectedAccountId">
                     <option value="">Select an account</option>
-                    @foreach (var account in accounts)
+                    @foreach (var account in AvailableAccounts)
                     {
-                        <option value="@account.Id">@account.Name (@account.Type)</option>
+                        <option value="@account.Id">@account.DisplayName</option>
                     }
                 </select>
+                @if (AvailableAccounts.Count == 0)
+                {
+                    <div class="form-text">No matching accounts found for this import type.</div>
+                }
             </div>
 
-            <div class="mb-3">
-                <label class="form-label" for="import-type">Data Type</label>
-                <select id="import-type" class="form-select" @bind="selectedImportType">
-                    <option value="">Select data type</option>
-                    <option value="cba">CBA Bank Account</option>
-                    <option value="coles">Coles Credit Card</option>
-                </select>
-            </div>
+            @if (IsInvestmentImportType)
+            {
+                <div class="mb-3">
+                    <label class="form-label" for="import-tolerance">Tolerance</label>
+                    <input id="import-tolerance" class="form-control" type="number" step="0.01" @bind="tolerance" />
+                </div>
 
+                <div class="form-check mb-3">
+                    <input id="replace-snapshot" class="form-check-input" type="checkbox" @bind="replaceExistingSnapshot" />
+                    <label class="form-check-label" for="replace-snapshot">Replace existing snapshot/file if duplicate detected</label>
+                </div>
+            }
 
             <div class="mb-3">
                 <label class="form-label">CSV file</label>
@@ -56,7 +72,14 @@ else
                 }
             </div>
 
-            <button class="btn btn-primary" @onclick="ImportAsync" disabled="@isImporting">@(isImporting ? "Importing..." : "Import")</button>
+            @if (IsInvestmentImportType)
+            {
+                <button class="btn btn-primary" @onclick="PreviewInvestmentImportAsync" disabled="@isPreviewing">@(isPreviewing ? "Previewing..." : "Preview import")</button>
+            }
+            else
+            {
+                <button class="btn btn-primary" @onclick="ImportAsync" disabled="@isImporting">@(isImporting ? "Importing..." : "Import")</button>
+            }
 
             @if (!string.IsNullOrWhiteSpace(importError))
             {
@@ -81,22 +104,98 @@ else
                     </ul>
                 }
             }
+
+            @if (investmentImportResult is not null)
+            {
+                <div class="alert alert-info mt-3">
+                    <div><strong>Imported rows:</strong> @investmentImportResult.ImportedRows</div>
+                    <div><strong>Failed rows:</strong> @investmentImportResult.FailedRows</div>
+                    <div><strong>Closed holdings:</strong> @investmentImportResult.ClosedHoldings</div>
+                </div>
+
+                @if (investmentImportResult.Warnings.Count > 0)
+                {
+                    <ul class="list-group mt-2">
+                        @foreach (var warning in investmentImportResult.Warnings)
+                        {
+                            <li class="list-group-item list-group-item-warning">@warning</li>
+                        }
+                    </ul>
+                }
+            }
+
+            @if (investmentPreviewResult is not null)
+            {
+                <div class="mt-3">
+                    <div class="fd-semantic-note mb-2">Snapshot time: @(investmentPreviewResult.SnapshotDateTime?.ToString("dd MMM yyyy HH:mm") ?? "Not detected")</div>
+                    <div class="fd-semantic-note mb-2">Valid rows: @investmentPreviewResult.SuccessfulRows | Issues: @investmentPreviewResult.FailedRows</div>
+
+                    @if (investmentPreviewResult.DuplicateFileDetected || investmentPreviewResult.DuplicateSnapshotDetected)
+                    {
+                        <div class="alert alert-warning">
+                            @if (investmentPreviewResult.DuplicateFileDetected)
+                            {
+                                <div>Duplicate file hash detected for this account.</div>
+                            }
+                            @if (investmentPreviewResult.DuplicateSnapshotDetected)
+                            {
+                                <div>Snapshot timestamp already exists for this account.</div>
+                            }
+                        </div>
+                    }
+
+                    @if (investmentPreviewResult.Issues.Count > 0)
+                    {
+                        <div class="alert alert-warning">
+                            <strong>Validation issues</strong>
+                            <ul class="mb-0">
+                                @foreach (var issue in investmentPreviewResult.Issues.Take(10))
+                                {
+                                    <li>Row @issue.RowNumber: @issue.ErrorMessage</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+
+                    <button class="btn btn-success" @onclick="ConfirmInvestmentImportAsync" disabled="@(isImporting || investmentPreviewResult.HasBlockingErrors)">
+                        @(isImporting ? "Importing..." : "Confirm import")
+                    </button>
+
+                    @if (!string.IsNullOrWhiteSpace(importError))
+                    {
+                        <div class="alert alert-danger mt-3">@importError</div>
+                    }
+                </div>
+            }
         </div>
     </div>
 }
 
 @code {
     private List<AccountModel> accounts = [];
+    private List<InvestmentAccountModel> investmentAccounts = [];
     private bool isLoading = true;
     private bool isImporting;
+    private bool isPreviewing;
     private string? loadError;
     private string? importError;
     private string? selectedAccountId;
     private string? selectedImportType;
+    private decimal? tolerance;
+    private bool replaceExistingSnapshot;
     private IBrowserFile? pendingFile;
     private byte[]? selectedFileBytes;
     private string? selectedFileName;
     private ImportResultModel? importResult;
+    private InvestmentImportCommitResultModel? investmentImportResult;
+    private InvestmentImportPreviewResultModel? investmentPreviewResult;
+
+    private bool IsInvestmentImportType => string.Equals(selectedImportType, "cba-investments", StringComparison.OrdinalIgnoreCase);
+
+    private IReadOnlyList<AccountSelectionOption> AvailableAccounts
+        => IsInvestmentImportType
+            ? investmentAccounts.Select(account => new AccountSelectionOption(account.Id, $"{account.Name} ({account.CurrencyCode})")).OrderBy(account => account.DisplayName).ToList()
+            : accounts.Select(account => new AccountSelectionOption(account.Id, $"{account.Name} ({account.Type})")).OrderBy(account => account.DisplayName).ToList();
 
     [Microsoft.AspNetCore.Components.SupplyParameterFromQuery(Name = "accountId")]
     public string? AccountIdFromQuery { get; set; }
@@ -113,10 +212,10 @@ else
 
         try
         {
-            var result = await ApiClient.GetAccountsAsync();
-            accounts = result.OrderBy(account => account.Name).ToList();
+            accounts = (await ApiClient.GetAccountsAsync()).OrderBy(account => account.Name).ToList();
+            investmentAccounts = (await ApiClient.GetInvestmentAccountsAsync()).OrderBy(account => account.Name).ToList();
 
-            if (Guid.TryParse(AccountIdFromQuery, out var accountId) && accounts.Any(account => account.Id == accountId))
+            if (Guid.TryParse(AccountIdFromQuery, out var accountId) && AvailableAccounts.Any(account => account.Id == accountId))
             {
                 selectedAccountId = accountId.ToString();
             }
@@ -129,6 +228,24 @@ else
         {
             isLoading = false;
         }
+    }
+
+    private Task OnImportTypeChangedAsync()
+    {
+        selectedAccountId = null;
+        importError = null;
+        importResult = null;
+        investmentImportResult = null;
+        investmentPreviewResult = null;
+        importError = null;
+
+        var firstAccount = AvailableAccounts.FirstOrDefault();
+        if (firstAccount is not null)
+        {
+            selectedAccountId = firstAccount.Id.ToString();
+        }
+
+        return Task.CompletedTask;
     }
 
     private Task OnFileSelected(InputFileChangeEventArgs args)
@@ -147,7 +264,10 @@ else
             Logger.LogInformation("OnFileSelected: File detected - Name={FileName}, Size={FileSize}", args.File.Name, args.File.Size);
             pendingFile = args.File;
             selectedFileName = args.File.Name;
+            selectedFileBytes = null;
+            investmentPreviewResult = null;
             importResult = null;
+            investmentImportResult = null;
             importError = null;
             Logger.LogInformation("OnFileSelected: File stored for later reading");
         }
@@ -207,6 +327,8 @@ else
     {
         importError = null;
         importResult = null;
+        investmentImportResult = null;
+        investmentPreviewResult = null;
 
         if (string.IsNullOrWhiteSpace(selectedImportType))
         {
@@ -226,14 +348,18 @@ else
             return;
         }
 
+        if (IsInvestmentImportType)
+        {
+            await PreviewInvestmentImportAsync();
+            return;
+        }
+
         isImporting = true;
 
         try
         {
-            // If file bytes aren't cached yet, read them now
             if (selectedFileBytes == null || selectedFileBytes.Length == 0)
             {
-                Logger.LogInformation("ImportAsync: File not yet read, reading now");
                 await ReadFileAsync();
             }
 
@@ -243,7 +369,6 @@ else
                 return;
             }
 
-            Logger.LogInformation("ImportAsync: Starting import with {ByteCount} bytes", selectedFileBytes.Length);
             using var stream = new MemoryStream(selectedFileBytes);
 
             importResult = selectedImportType switch
@@ -256,7 +381,7 @@ else
         catch (Exception ex)
         {
             Logger.LogError(ex, "ImportAsync: Failed - {Message}", ex.Message);
-            importError = $"Import failed: {ex.Message}";
+            importError = ex.Message;
         }
         finally
         {
@@ -265,4 +390,96 @@ else
             selectedFileName = null;
         }
     }
+
+    private async Task PreviewInvestmentImportAsync()
+    {
+        importError = null;
+        investmentImportResult = null;
+        investmentPreviewResult = null;
+
+        if (!Guid.TryParse(selectedAccountId, out var accountId))
+        {
+            importError = "Select an investment account before previewing.";
+            return;
+        }
+
+        if (selectedFileName is null)
+        {
+            importError = "Select a CSV file before previewing.";
+            return;
+        }
+
+        isPreviewing = true;
+        try
+        {
+            if (selectedFileBytes is null || selectedFileBytes.Length == 0)
+                await ReadFileAsync();
+
+            if (selectedFileBytes is null || selectedFileBytes.Length == 0)
+            {
+                importError = "Failed to read the selected file.";
+                return;
+            }
+
+            await using var previewStream = new MemoryStream(selectedFileBytes, writable: false);
+            investmentPreviewResult = await ApiClient.PreviewInvestmentImportAsync(
+                accountId,
+                previewStream,
+                selectedFileName,
+                tolerance);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "PreviewInvestmentImportAsync: Failed - {Message}", ex.Message);
+            importError = ex.Message;
+        }
+        finally
+        {
+            isPreviewing = false;
+        }
+    }
+
+    private async Task ConfirmInvestmentImportAsync()
+    {
+        if (investmentPreviewResult is null || !investmentPreviewResult.SnapshotDateTime.HasValue)
+        {
+            importError = "Preview the investment file before confirming.";
+            return;
+        }
+
+        if (!Guid.TryParse(selectedAccountId, out var accountId))
+        {
+            importError = "Select an investment account before confirming.";
+            return;
+        }
+
+        isImporting = true;
+        importError = null;
+        investmentImportResult = null;
+
+        try
+        {
+            var request = new ConfirmInvestmentImportRequestModel(
+                accountId,
+                investmentPreviewResult.FileName,
+                investmentPreviewResult.FileHash,
+                investmentPreviewResult.SnapshotDateTime.Value,
+                investmentPreviewResult.CurrencyCode,
+                replaceExistingSnapshot,
+                investmentPreviewResult.Holdings,
+                investmentPreviewResult.Issues);
+
+            investmentImportResult = await ApiClient.ConfirmInvestmentImportAsync(accountId, request);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "ConfirmInvestmentImportAsync: Failed - {Message}", ex.Message);
+            importError = ex.Message;
+        }
+        finally
+        {
+            isImporting = false;
+        }
+    }
+    private sealed record AccountSelectionOption(Guid Id, string DisplayName);
 }

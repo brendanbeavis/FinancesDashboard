@@ -1,3 +1,5 @@
+using System.Net.Http.Json;
+using System.Text.Json;
 using FinancesDashboard.Web.Models;
 
 namespace FinancesDashboard.Web.Services;
@@ -327,10 +329,91 @@ public sealed class FinancesApiClient(HttpClient httpClient)
         CancellationToken cancellationToken = default)
     {
         var response = await httpClient.PostAsJsonAsync($"/api/investments/{accountId}/import/confirm", request, cancellationToken);
-        response.EnsureSuccessStatusCode();
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var message = await ReadApiErrorAsync(response, cancellationToken);
+            throw new InvalidOperationException(message);
+        }
 
         var result = await response.Content.ReadFromJsonAsync<InvestmentImportCommitResultModel>(cancellationToken);
         return result ?? throw new InvalidOperationException("Investment import confirm payload was empty.");
+    }
+
+    public async Task<IReadOnlyList<RawTableListItemModel>> GetRawTablesAsync(CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<List<RawTableListItemModel>>("/api/settings/tables", cancellationToken) ?? [];
+    }
+
+    public async Task<RawTableDataModel> GetRawTableAsync(string tableName, CancellationToken cancellationToken = default)
+    {
+        var table = await httpClient.GetFromJsonAsync<RawTableDataModel>(
+            $"/api/settings/tables/{Uri.EscapeDataString(tableName)}",
+            cancellationToken);
+        return table ?? throw new InvalidOperationException("Raw table payload was empty.");
+    }
+
+    public async Task InsertRawRowAsync(string tableName, IReadOnlyDictionary<string, JsonElement> values, CancellationToken cancellationToken = default)
+    {
+        var response = await httpClient.PostAsJsonAsync($"/api/settings/tables/{Uri.EscapeDataString(tableName)}/rows", values, cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task UpdateRawRowAsync(string tableName, RawTableMutationModel request, CancellationToken cancellationToken = default)
+    {
+        var response = await httpClient.PutAsJsonAsync($"/api/settings/tables/{Uri.EscapeDataString(tableName)}/rows", request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task DeleteRawRowAsync(string tableName, IReadOnlyDictionary<string, JsonElement> key, CancellationToken cancellationToken = default)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Delete, $"/api/settings/tables/{Uri.EscapeDataString(tableName)}/rows")
+        {
+            Content = JsonContent.Create(key)
+        };
+        var response = await httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
+    private static async Task<string> ReadApiErrorAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(body))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+                var root = document.RootElement;
+
+                if (root.TryGetProperty("errors", out var errors) && errors.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var error in errors.EnumerateObject())
+                    {
+                        if (error.Value.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var message in error.Value.EnumerateArray())
+                            {
+                                if (message.ValueKind == JsonValueKind.String)
+                                    return message.GetString() ?? "The request could not be completed.";
+                            }
+                        }
+                    }
+                }
+
+                if (root.TryGetProperty("detail", out var detail) && detail.ValueKind == JsonValueKind.String)
+                    return detail.GetString() ?? "The request could not be completed.";
+
+                if (root.TryGetProperty("title", out var title) && title.ValueKind == JsonValueKind.String)
+                    return title.GetString() ?? "The request could not be completed.";
+            }
+            catch (JsonException)
+            {
+                return body;
+            }
+        }
+
+        return $"The request failed with HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).";
     }
 
     private sealed record SummaryResponse(

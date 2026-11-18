@@ -57,6 +57,7 @@ builder.Services.AddScoped<PortfolioPerformanceService>();
 builder.Services.AddScoped<CreditCardPositionService>();
 builder.Services.AddScoped<DashboardApplicationService>();
 builder.Services.AddScoped<MortgageApplicationService>();
+builder.Services.AddScoped<RawTableManagementService>();
 
 var app = builder.Build();
 
@@ -735,6 +736,89 @@ app.MapGet("/api/mortgages/{accountId}/current-balance", async (
 {
     var balance = await service.GetCurrentBalanceAsync(accountId, cancellationToken);
     return Results.Ok(new { currentBalance = balance });
+});
+
+app.MapGet("/api/settings/tables", async (RawTableManagementService service, CancellationToken cancellationToken) =>
+{
+    var tables = await service.GetTablesAsync(cancellationToken);
+    return Results.Ok(tables);
+});
+
+app.MapGet("/api/settings/tables/{tableName}", async (string tableName, RawTableManagementService service, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var table = await service.GetTableAsync(tableName, cancellationToken);
+        return Results.Ok(table);
+    }
+    catch (KeyNotFoundException)
+    {
+        return Results.NotFound();
+    }
+});
+
+app.MapPost("/api/settings/tables/{tableName}/rows", async (
+    string tableName,
+    [FromBody] Dictionary<string, System.Text.Json.JsonElement>? values,
+    RawTableManagementService service,
+    CancellationToken cancellationToken) =>
+{
+    if (values is null)
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["values"] = ["Record values are required."] });
+
+    try
+    {
+        await service.InsertAsync(tableName, values, cancellationToken);
+        return Results.Created($"/api/settings/tables/{Uri.EscapeDataString(tableName)}", null);
+    }
+    catch (KeyNotFoundException)
+    {
+        return Results.NotFound();
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["values"] = [ex.Message] });
+    }
+});
+
+app.MapPut("/api/settings/tables/{tableName}/rows", async (
+    string tableName,
+    [FromBody] RawTableMutationRequest? request,
+    RawTableManagementService service,
+    CancellationToken cancellationToken) =>
+{
+    if (request is null)
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["request"] = ["Mutation request is required."] });
+
+    try
+    {
+        var updated = await service.UpdateAsync(tableName, request, cancellationToken);
+        return updated ? Results.Ok() : Results.NotFound();
+    }
+    catch (KeyNotFoundException)
+    {
+        return Results.NotFound();
+    }
+});
+
+app.MapDelete("/api/settings/tables/{tableName}/rows", async (
+    string tableName,
+    [FromBody] Dictionary<string, System.Text.Json.JsonElement>? key,
+    RawTableManagementService service,
+    CancellationToken cancellationToken) =>
+{
+    if (key is null)
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["key"] = ["Primary key values are required."] });
+
+    try
+    {
+        var deleted = await service.DeleteAsync(tableName, key, cancellationToken);
+        return deleted ? Results.NoContent() : Results.NotFound();
+    }
+    catch (KeyNotFoundException)
+    {
+        return Results.NotFound();
+    }
 });
 
 app.MapDefaultEndpoints();
