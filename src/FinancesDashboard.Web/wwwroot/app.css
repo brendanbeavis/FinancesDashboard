@@ -1175,116 +1175,45 @@ a:hover {
     border: 1px solid var(--fd-border);
 }
 
-.fd-assumption-grid {
-    display: grid;
-    gap: 1rem;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-}
-
-.fd-assumption-card {
-    grid-column: span 4;
-    padding: 1rem;
-    border: 1px solid var(--fd-border);
-    border-radius: var(--fd-radius-lg);
-    background: var(--fd-surface-soft);
-}
-
-.fd-assumption-card--wide {
-    grid-column: span 12;
-}
-
-.fd-assumption-card__eyebrow {
-    color: var(--fd-text-muted);
-    font-size: 0.74rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    margin-bottom: 0.55rem;
-}
-
-.fd-assumption-card__value {
-    color: var(--fd-text-strong);
-    font-size: 1.18rem;
-    font-weight: 800;
-}
-
-.fd-assumption-card__meta {
-    margin-top: 0.35rem;
-    color: var(--fd-text-muted);
-    font-size: 0.82rem;
-}
-
-.fd-offset-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-    gap: 0.75rem;
-}
-
-.fd-offset-option {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.75rem;
-    padding: 0.9rem 1rem;
-    border: 1px solid var(--fd-border);
-    border-radius: var(--fd-radius-lg);
-    background: var(--fd-surface-strong);
-}
-
-.fd-offset-option__body {
-    display: grid;
-    gap: 0.15rem;
-}
-
-.fd-offset-option__title {
-    color: var(--fd-text-strong);
-    font-weight: 700;
-}
-
-.fd-forecast-status {
+.fd-provider-icon {
+    width: 2.45rem;
+    height: 2.45rem;
+    flex: 0 0 2.45rem;
     display: inline-flex;
     align-items: center;
-    gap: 0.45rem;
-    padding: 0.42rem 0.72rem;
-    border-radius: var(--fd-radius-lg);
-    border: 1px solid var(--fd-border);
+    justify-content: center;
+    border-radius: 0.72rem;
+    border: 1px solid rgba(17, 18, 20, 0.10);
+    box-shadow: 0 0.18rem 0.55rem rgba(17, 18, 20, 0.08);
+    vertical-align: middle;
+}
+
+.fd-provider-icon__mark {
+    font-size: 0.72rem;
+    line-height: 1;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.fd-provider-icon--cba {
+    background: #ffcc00;
+    color: #171717;
+}
+
+.fd-provider-icon--coles {
+    background: #d71920;
+    color: #ffffff;
+}
+
+.fd-provider-icon--generic {
     background: var(--fd-surface-soft);
     color: var(--fd-text-strong);
-    font-size: 0.82rem;
-    font-weight: 700;
 }
 
-.fd-forecast-status--positive {
-    color: var(--fd-positive);
-    background: rgba(53, 107, 63, 0.08);
-    border-color: rgba(53, 107, 63, 0.18);
-}
-
-.fd-forecast-status--warning {
-    color: var(--fd-warning);
-    background: rgba(154, 98, 0, 0.08);
-    border-color: rgba(154, 98, 0, 0.18);
-}
-
-.fd-forecast-status--muted {
-    color: var(--fd-text-muted);
-}
-
-.fd-recalc-banner {
+.fd-account-name-with-icon {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding: 0.85rem 1rem;
-    border: 1px solid rgba(48, 196, 220, 0.26);
-    border-radius: var(--fd-radius-lg);
-    background: rgba(48, 196, 220, 0.1);
-    color: var(--fd-text-strong);
-}
-
-.fd-metric-grid--forecast > div,
-.fd-metric-grid--mortgage > div {
-    display: flex;
+    gap: 0.72rem;
 }
 
 @media (max-width: 991.98px) {

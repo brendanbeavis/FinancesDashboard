@@ -51,9 +51,12 @@ else
                     {
                         <tr>
                             <td>
-                                <div class="fd-account-name">
-                                    <div class="fd-account-name__title">@account.Name</div>
-                                    <div class="fd-account-name__meta">@account.Type account · @(account.IsActive ? "included in reporting" : "review only")</div>
+                                <div class="fd-account-name-with-icon">
+                                    <ProviderIcon Provider="@account.Provider" />
+                                    <div class="fd-account-name">
+                                        <div class="fd-account-name__title">@account.Name</div>
+                                        <div class="fd-account-name__meta">@account.Type account · @(account.IsActive ? "included in reporting" : "review only")</div>
+                                    </div>
                                 </div>
                             </td>
                             <td><span class="@GetAccountTypeChipClass(account.Type)">@account.Type</span></td>
@@ -129,11 +132,11 @@ else
         showCreateModal = true;
     }
 
-    private async Task OnCreateAccount((string Name, string Type) values)
+    private async Task OnCreateAccount((string Name, string Type, string? Provider) values)
     {
         try
         {
-            var request = new CreateAccountRequestModel(values.Name, values.Type);
+            var request = new CreateAccountRequestModel(values.Name, values.Type, Provider: values.Provider);
             var created = await ApiClient.CreateAccountAsync(request);
             accounts.Add(created);
             accounts = accounts.OrderBy(account => account.Name).ToList();
@@ -157,14 +160,21 @@ else
         showEditModal = true;
     }
 
-    private async Task OnEditSave((string Name, bool IsActive) values)
+    private async Task OnEditSave((string Name, bool IsActive, string? Provider) values)
     {
         if (selectedAccount is null)
             return;
 
         try
         {
-            var request = new UpdateAccountRequestModel(values.Name, values.IsActive);
+            var request = new UpdateAccountRequestModel(
+                values.Name,
+                values.IsActive,
+                selectedAccount.AccountNumber,
+                selectedAccount.CurrencyCode,
+                values.Provider,
+                selectedAccount.IncludeInNetWorth);
+
             var updated = await ApiClient.UpdateAccountAsync(selectedAccount.Id, request);
 
             var index = accounts.FindIndex(a => a.Id == selectedAccount.Id);

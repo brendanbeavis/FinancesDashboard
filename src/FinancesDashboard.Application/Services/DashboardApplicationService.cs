@@ -354,7 +354,8 @@ public sealed class DashboardApplicationService(
                 lastTransactionDate,
                 transactionCount,
                 previousMonthTransactionCount,
-                account.IsActive));
+                account.IsActive,
+                account.Provider));
         }
 
         return summaries;

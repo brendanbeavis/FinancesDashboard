@@ -31,6 +31,15 @@
                                 }
                             </select>
                         </div>
+
+                        <div class="mb-0">
+                            <label class="form-label" for="create-provider">Provider</label>
+                            <select id="create-provider" class="form-select" @bind="Provider">
+                                <option value="">No provider</option>
+                                <option value="CBA">CBA</option>
+                                <option value="Coles">Coles</option>
+                            </select>
+                        </div>
                     </form>
                 </div>
                 <div class="modal-footer">
@@ -55,13 +64,14 @@
     public string[] AccountTypes { get; set; } = [];
 
     [Parameter]
-    public EventCallback<(string Name, string Type)> OnCreateAsync { get; set; }
+    public EventCallback<(string Name, string Type, string? Provider)> OnCreateAsync { get; set; }
 
     [Parameter]
     public EventCallback OnClose { get; set; }
 
     private string AccountName = string.Empty;
     private string AccountType = "Transaction";
+    private string? Provider;
 
     protected override void OnParametersSet()
     {
@@ -70,6 +80,7 @@
             // Reset form when modal opens
             AccountName = string.Empty;
             AccountType = AccountTypes.FirstOrDefault() ?? "Transaction";
+            Provider = null;
             ErrorMessage = null;
         }
     }
@@ -88,9 +99,10 @@
 
         try
         {
-            await OnCreateAsync.InvokeAsync((AccountName.Trim(), AccountType));
+            await OnCreateAsync.InvokeAsync((AccountName.Trim(), AccountType, Provider));
             AccountName = string.Empty;
             AccountType = AccountTypes.FirstOrDefault() ?? "Transaction";
+            Provider = null;
         }
         finally
         {

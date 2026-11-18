@@ -12,4 +12,5 @@ public sealed record AccountDashboardSummaryModel(
     DateOnly? LastTransactionDate,
     int TransactionCount,
     int PreviousMonthTransactionCount,
-    bool IsActive);
+    bool IsActive,
+    string? Provider = null);

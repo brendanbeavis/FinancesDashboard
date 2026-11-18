@@ -396,12 +396,15 @@ else
                                 {
                                     <tr class="fd-account-row" @onclick="() => NavigateToAccount(summary.AccountId)" role="button" tabindex="0" @onkeydown="e => HandleKeyDown(e, summary.AccountId)">
                                         <td>
-                                            <div class="fd-account-name">
-                                                <a href="/accounts/@summary.AccountId/transactions" class="fd-table-primary-link">
-                                                    @summary.AccountName
-                                                </a>
-                                                <div class="fd-account-name__meta">
-                                                    @(summary.IsActive ? "Active account" : "Inactive account") · @(summary.TransactionCount == 0 ? "No transactions yet" : $"{summary.TransactionCount} transaction(s)")
+                                            <div class="fd-account-name-with-icon">
+                                                <ProviderIcon Provider="@summary.Provider" />
+                                                <div class="fd-account-name">
+                                                    <a href="/accounts/@summary.AccountId/transactions" class="fd-table-primary-link">
+                                                        @summary.AccountName
+                                                    </a>
+                                                    <div class="fd-account-name__meta">
+                                                        @(summary.IsActive ? "Active account" : "Inactive account") · @(summary.TransactionCount == 0 ? "No transactions yet" : $"{summary.TransactionCount} transaction(s)")
+                                                    </div>
                                                 </div>
                                             </div>
                                         </td>

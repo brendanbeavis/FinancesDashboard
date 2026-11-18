@@ -22,6 +22,19 @@
                             <input id="edit-name" class="form-control" @bind="EditName" />
                         </div>
 
+                        <div class="mb-3">
+                            <label class="form-label" for="edit-provider">Provider</label>
+                            <select id="edit-provider" class="form-select" @bind="EditProvider">
+                                <option value="">No provider</option>
+                                <option value="CBA">CBA</option>
+                                <option value="Coles">Coles</option>
+                                @if (!string.IsNullOrWhiteSpace(EditProvider) && !EditProvider.Equals("CBA", StringComparison.OrdinalIgnoreCase) && !EditProvider.Equals("Coles", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <option value="@EditProvider">@EditProvider</option>
+                                }
+                            </select>
+                        </div>
+
                         <div class="mb-4 form-check">
                             <input id="edit-active" type="checkbox" class="form-check-input" @bind="EditIsActive" />
                             <label class="form-check-label" for="edit-active">Active</label>
@@ -61,6 +74,7 @@
     public EventCallback<AccountModel?> OnClose { get; set; }
 
     private string EditName = string.Empty;
+    private string? EditProvider;
     private bool EditIsActive = true;
 
     protected override void OnParametersSet()
@@ -68,6 +82,7 @@
         if (Account is not null)
         {
             EditName = Account.Name;
+            EditProvider = Account.Provider;
             EditIsActive = Account.IsActive;
             ErrorMessage = null;
         }
@@ -87,7 +102,7 @@
 
         try
         {
-            await OnSaveAsync.InvokeAsync((EditName, EditIsActive));
+            await OnSaveAsync.InvokeAsync((EditName, EditIsActive, EditProvider));
         }
         finally
         {
@@ -120,7 +135,7 @@
     }
 
     [Parameter]
-    public EventCallback<(string Name, bool IsActive)> OnSaveAsync { get; set; }
+    public EventCallback<(string Name, bool IsActive, string? Provider)> OnSaveAsync { get; set; }
 
     [Parameter]
     public EventCallback OnDeleteAsync { get; set; }
